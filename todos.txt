@@ -1,0 +1,64 @@
+# ------- Rzeczy do zrobienia ------- #
+---------------------------------------
+---Legenda-----------------------------
+[]	- do zrobienia
+[x] - nie zrobione, plan się zmienił --> na co się plan zmienił
+[o] - zrobione
+[!] - nie zrobione, a powinno
+[^] - zrobione, ale nie do końca dobrze, należy poprawić
+() - zrobione, a nie było planowane
+---------------------------------------
+---------------------------------------
+
+### 28.07.2026 ###
+[] napisać skille
+[] poprawić statusboard i dodać zbieranie statystyk
+[] podłączyć sieci
+
+### 22.07.2026 ###
+[o] uporządkować moduły w oparciu o nowy plan (świat, mózg, sensory, aktuatory)
+[o] przygotować threads, services etc. 
+[o] napisać jeden skill
+
+----------------------------------------------------reset-----------------------------------------------------
+
+### ??.??.2026 ###
+[x] na podstawie posiadanego PDDL uczenie się predykatów i wyników. || TO TEN KROK || --> nowa struktura
+
+### 24.03.2026 ###
+[o] opracwać PDDL na umiejętności
+() nowy projekt, skille i wgl porządek
+
+### 20.03.2026 ###
+[!] opracwać PDDL na umiejętności
+
+### 18.03.2026 ###
+[o] zrobić areny testowe
+[o] dopracować umiejętności na arenach testowych
+[!] opracwać PDDL na w.w. umiejętności
+() poprawiłam widok symulacji, sparametryzowałam areny
+
+### 17.03.2026 ###
+[o] przenieść to na planowanie PDDL 
+[!] zaimplementować w PDDL: idzie do drzwi, otwiera drzwi, idzie do mety, jednocześnie unika ścian
+() poprawiłam sterowanie oparte na umiejęstnościach, dodałam widok kamery wraz ze statusem sensorów i aktuatorów.
+
+### 11.03.2026 ###
+[o] poprawka: zimplementować sterowanie otwierające drzwi i unikające ścian
+[x] dodać umiejętności:		--> dodane inne umiejętności
+	* otwieranie drzwi,		--> jedź prosto
+	* unikanie ścian		--> obracaj się póki nie masz wolnej drogi
+[o] zaimplementować sterowanie oparte na umiejętnościach
+[o] you can do it!
+
+
+### 10.03.2026 ###
+[o]	przrobić kod wg UML
+[o]	zaimplementować testowe sterowanie.
+[^] zimplementować sterowanie otwierające drzwi i unikające ścian
+
+### 04.03.2026 ###
+[x]	poprawić strukturę kodu: --> nowa struktura w UML
+	* modele: arena, robot; 
+	* klasy: robot, sterowanie; 
+[x]	sterowanie przykładowe: idzie do drzwi, potem idzie do mety --> zrealizwane w nowej strukturze

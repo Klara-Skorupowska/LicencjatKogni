@@ -1,0 +1,91 @@
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="4.0">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>3262c0fc-6a77-457e-8048-af9f6f9eef33</ProjectGuid>
+    <ProjectHome>
+    </ProjectHome>
+    <StartupFile>main.py</StartupFile>
+    <SearchPath>
+    </SearchPath>
+    <WorkingDirectory>.</WorkingDirectory>
+    <OutputPath>.</OutputPath>
+    <Name>LicencjatKogni</Name>
+    <RootNamespace>WaldekTheRobot</RootNamespace>
+    <InterpreterId>MSBuild|env|$(MSBuildProjectFullPath)</InterpreterId>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+    <DebugSymbols>true</DebugSymbols>
+    <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
+    <DebugSymbols>true</DebugSymbols>
+    <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="robot\agent.py" />
+    <Compile Include="robot\agent_loop.py" />
+    <Compile Include="robot\skills.py" />
+    <Compile Include="robot\virtual_actuator.py" />
+    <Compile Include="robot\virtual_sensor.py" />
+    <Compile Include="communicator.py" />
+    <Compile Include="robot\__init__.py" />
+    <Compile Include="simulation\environment.py" />
+    <Compile Include="simulation\real_actuator.py" />
+    <Compile Include="simulation\arena.py" />
+    <Compile Include="simulation\object.py" />
+    <Compile Include="simulation\real_robot.py" />
+    <Compile Include="simulation\real_sensor.py" />
+    <Compile Include="simulation\simulation_loop.py" />
+    <Compile Include="simulation\stats.py" />
+    <Compile Include="main.py" />
+    <Compile Include="old\body.py" />
+    <Compile Include="old\brain.py" />
+    <Compile Include="old\robot.py" />
+    <Compile Include="old\skill.py" />
+    <Compile Include="old\statusboard.py" />
+    <Compile Include="old\WaldekTheRobot.py" />
+    <Compile Include="simulation\__init__.py" />
+  </ItemGroup>
+  <ItemGroup>
+    <Interpreter Include="env\">
+      <Id>env</Id>
+      <Version>3.9</Version>
+      <Description>env (Python 3.9 (64-bit))</Description>
+      <InterpreterPath>Scripts\python.exe</InterpreterPath>
+      <WindowsInterpreterPath>Scripts\pythonw.exe</WindowsInterpreterPath>
+      <PathEnvironmentVariable>PYTHONPATH</PathEnvironmentVariable>
+      <Architecture>X64</Architecture>
+    </Interpreter>
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="models\" />
+    <Folder Include="models\urdfs\" />
+    <Folder Include="simulation\" />
+    <Folder Include="old\" />
+    <Folder Include="robot\" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="models\cube.xacro" />
+    <Content Include="old\domain.pddl" />
+    <Content Include="models\arena.xacro" />
+    <Content Include="models\arena_GoForward.xacro" />
+    <Content Include="models\arena_OpenDoor.xacro" />
+    <Content Include="models\epuck2.xacro" />
+    <Content Include="models\urdfs\arena.urdf" />
+    <Content Include="models\urdfs\arena_GoForward.urdf" />
+    <Content Include="models\urdfs\arena_OpenDoor.urdf" />
+    <Content Include="models\urdfs\epuck2.urdf" />
+    <Content Include="old\problem.pddl" />
+    <Content Include="todos.txt" />
+  </ItemGroup>
+  <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
+  <!-- Uncomment the CoreCompile target to enable the Build command in
+       Visual Studio and specify your pre- and post-build commands in
+       the BeforeBuild and AfterBuild targets below. -->
+  <!--<Target Name="CoreCompile" />-->
+  <Target Name="BeforeBuild">
+  </Target>
+  <Target Name="AfterBuild">
+  </Target>
+</Project>

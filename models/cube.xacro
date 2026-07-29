@@ -1,0 +1,48 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="cube_robot">
+
+  <!-- ==================== PROPERTIES ==================== -->
+  <!-- Cube size in meters (5 cm = 0.05 m) -->
+  <xacro:property name="cube_size" value="0.05" />
+  <!-- Mass in kg (e.g., 100g = 0.1kg) -->
+  <xacro:property name="cube_mass" value="0.1" />
+
+  <!-- ==================== MACROS ==================== -->
+  <!-- Box Inertia Macro (for realistic physics simulation) -->
+  <xacro:macro name="box_inertia" params="m x y z">
+    <inertial>
+      <mass value="${m}" />
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <inertia 
+        ixx="${(1/12) * m * (y*y + z*z)}" ixy="0.0" ixz="0.0"
+        iyy="${(1/12) * m * (x*x + z*z)}" iyz="0.0"
+        izz="${(1/12) * m * (x*x + y*y)}" />
+    </inertial>
+  </xacro:macro>
+
+  <!-- ==================== CUBE LINK ==================== -->
+  <link name="cube_link">
+    <!-- Visual Representation -->
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <box size="${cube_size} ${cube_size} ${cube_size}" />
+      </geometry>
+      <material name="blue">
+        <color rgba="0.0 0.4 0.8 1.0" />
+      </material>
+    </visual>
+
+    <!-- Collision Boundaries -->
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <box size="${cube_size} ${cube_size} ${cube_size}" />
+      </geometry>
+    </collision>
+
+    <!-- Dynamics/Inertial Macro Call -->
+    <xacro:box_inertia m="${cube_mass}" x="${cube_size}" y="${cube_size}" z="${cube_size}" />
+  </link>
+
+</robot>

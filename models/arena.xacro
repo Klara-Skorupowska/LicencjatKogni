@@ -1,0 +1,231 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="arena">
+	<xacro:property name="floor_x" value="1.0" />
+	<xacro:property name="floor_y" value="1.0" />
+	<xacro:property name="floor_friction" value="10.0" />
+
+	<xacro:property name="wall_height" value="0.2" />
+	<xacro:property name="wall_thick" value="0.02" />
+
+	<xacro:property name="door_size" value="0.18" />
+	<xacro:property name="door_friction" value="0.01" />
+	<xacro:property name="clearance" value="0.005" />
+	<xacro:property name="door_width" value="${door_size - (clearance * 2)}" />
+	<xacro:property name="door_height" value="${door_size - clearance}" />
+
+	<xacro:property name="divider_x" value="0.02" />
+	<xacro:property name="divider_y_segment" value="${(floor_y - door_size) / 2}" />
+	<xacro:property name="divider_offset_y" value="${(floor_y / 2) - (divider_y_segment / 2)}" />
+
+
+
+	<material name="white">
+		<color rgba="1 1 1 1"/>
+	</material>
+	<material name="black">
+		<color rgba="0 0 0 1"/>
+	</material>
+	<material name="green">
+		<color rgba="0 1 0 1"/>
+	</material>
+	<material name="blue">
+		<color rgba="0 0 1 1"/>
+	</material>
+	<material name="red">
+		<color rgba="1 0 0 1"/>
+	</material>
+
+	<link name="floor">
+		<inertial>
+			<mass value="0"/>
+			<inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+		</inertial>
+		<visual>
+			<origin xyz="0 0 -0.01"/>
+			<geometry>
+				<box size="${floor_x} ${floor_y} 0.02"/>
+			</geometry>
+			<material name="black"/>
+		</visual>
+		<collision>
+			<origin xyz="0 0 -0.01"/>
+			<geometry>
+				<box size="${floor_x} ${floor_y} 0.02"/>
+			</geometry>
+		</collision>
+		<contact>
+			<lateral_friction value="${floor_friction}"/>
+		</contact>
+	</link>
+
+	<link name="start_pad">
+		<inertial>
+			<mass value="0.1"/>
+			<inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001"/>
+		</inertial>
+		<visual>
+			<geometry>
+				<box size="0.1 0.1 0.001"/>
+			</geometry>
+			<material name="white"/>
+		</visual>
+	</link>
+	<joint name="start_joint" type="fixed">
+		<parent link="floor"/>
+		<child link="start_pad"/>
+		<origin xyz="${-(floor_x * 0.375)} 0 0.001"/>
+	</joint>
+
+	<link name="end_pad">
+		<inertial>
+			<mass value="0.1"/>
+			<inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001"/>
+		</inertial>
+		<visual>
+			<geometry>
+				<box size="0.1 0.1 0.001"/>
+			</geometry>
+			<material name="blue"/>
+		</visual>
+	</link>
+	<joint name="end_joint" type="fixed">
+		<parent link="floor"/>
+		<child link="end_pad"/>
+		<origin xyz="${floor_x*0.375} 0 0.001"/>
+	</joint>
+
+	<link name="walls">
+		<inertial>
+			<mass value="0"/>
+			<inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+		</inertial>
+		<visual>
+			<origin xyz="0 ${floor_y/2} ${wall_height/2}"/>
+			<geometry>
+				<box size="${floor_x} ${wall_thick} ${wall_height}"/>
+			</geometry>
+			<material name="red"/>
+		</visual>
+		<collision>
+			<origin xyz="0 ${floor_y/2} ${wall_height/2}"/>
+			<geometry>
+				<box size="${floor_x} ${wall_thick} ${wall_height}"/>
+			</geometry>
+		</collision>
+		<visual>
+			<origin xyz="0 -${floor_y/2} ${wall_height/2}"/>
+			<geometry>
+				<box size="${floor_x} ${wall_thick} ${wall_height}"/>
+			</geometry>
+			<material name="red"/>
+		</visual>
+		<collision>
+			<origin xyz="0 -${floor_y/2} ${wall_height/2}"/>
+			<geometry>
+				<box size="${floor_x} ${wall_thick} ${wall_height}"/>
+			</geometry>
+		</collision>
+		<visual>
+			<origin xyz="-${floor_x/2} 0 ${wall_height/2}"/>
+			<geometry>
+				<box size="${wall_thick} ${floor_y} ${wall_height}"/>
+			</geometry>
+			<material name="red"/>
+		</visual>
+		<collision>
+			<origin xyz="-${floor_x/2} 0 ${wall_height/2}"/>
+			<geometry>
+				<box size="${wall_thick} ${floor_y} ${wall_height}"/>
+			</geometry>
+		</collision>
+		<visual>
+			<origin xyz="${floor_x/2} 0 ${wall_height/2}"/>
+			<geometry>
+				<box size="${wall_thick} ${floor_y} ${wall_height}"/>
+			</geometry>
+			<material name="red"/>
+		</visual>
+		<collision>
+			<origin xyz="${floor_x/2} 0 ${wall_height/2}"/>
+			<geometry>
+				<box size="${wall_thick} ${floor_y} ${wall_height}"/>
+			</geometry>
+		</collision>
+	</link>
+	<joint name="walls_joint" type="fixed">
+		<parent link="floor"/>
+		<child link="walls"/>
+	</joint>
+
+	<link name="divider">
+		<inertial>
+			<mass value="0"/>
+			<inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+		</inertial>
+
+		<visual>
+			<origin xyz="0 ${divider_offset_y} ${wall_height/2}"/>
+			<geometry>
+				<box size="${divider_x} ${divider_y_segment} ${wall_height}"/>
+			</geometry>
+			<material name="red"/>
+		</visual>
+		<collision>
+			<origin xyz="0 ${divider_offset_y} ${wall_height/2}"/>
+			<geometry>
+				<box size="${divider_x} ${divider_y_segment} ${wall_height}"/>
+			</geometry>
+		</collision>
+
+		<visual>
+			<origin xyz="0 -${divider_offset_y} ${wall_height/2}"/>
+			<geometry>
+				<box size="${divider_x} ${divider_y_segment} ${wall_height}"/>
+			</geometry>
+			<material name="red"/>
+		</visual>
+		<collision>
+			<origin xyz="0 -${divider_offset_y} ${wall_height/2}"/>
+			<geometry>
+				<box size="${divider_x} ${divider_y_segment} ${wall_height}"/>
+			</geometry>
+		</collision>
+	</link>
+	<joint name="divider_joint" type="fixed">
+		<parent link="floor"/>
+		<child link="divider"/>
+	</joint>
+
+	<link name="door_link">
+		<inertial>
+			<mass value="0.000000001"/>
+			<origin xyz="0 -${door_width/2} ${door_height/2}"/>
+			<inertia ixx="0.0001" ixy="0" ixz="0" iyy="0.0001" iyz="0" izz="0.0001"/>
+		</inertial>
+		<visual>
+			<origin xyz="0 -${door_width/2} ${door_height/2 + clearance}"/>
+			<geometry>
+				<box size="0.02 ${door_width} ${door_height}"/>
+			</geometry>
+			<material name="green"/>
+		</visual>
+		<collision>
+			<origin xyz="0 -${door_width/2} ${door_height/2 + clearance}"/>
+			<geometry>
+				<box size="0.02 ${door_width} ${door_height}"/>
+			</geometry>
+		</collision>
+		<contact>
+			<lateral_friction value="0.0"/>
+		</contact>
+	</link>
+
+	<joint name="door_hinge" type="revolute">
+		<parent link="floor"/>
+		<child link="door_link"/>
+		<origin xyz="0 ${(door_size/2)} 0" rpy="0 0 0"/>
+		<axis xyz="0 0 1"/>
+		<limit effort="100" lower="-1.57" upper="1.57" velocity="25"/>
+		<dynamics damping="0.01" friction="${door_friction}"/>
+	</joint>
+</robot>
