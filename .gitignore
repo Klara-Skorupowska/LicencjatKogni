@@ -5,6 +5,7 @@
 
 # --- MINE ---
 environment/
+old/
 
 # User-specific files
 *.rsuser
