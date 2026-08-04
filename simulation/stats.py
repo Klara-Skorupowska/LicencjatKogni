@@ -3,6 +3,18 @@
 import numpy as np
 import cv2
 
+from .object import Object
+from .real_sensor import CameraSensor
+
+import sys
+from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QGroupBox
+from PyQt5.QtGui import QImage, QPixmap
+from PyQt5.QtCore import Qt
+
+import os
+import csv
+from datetime import datetime
+
 class Stats():
     def __init__(self):
         pass
@@ -10,86 +22,204 @@ class Stats():
         pass
     def show(self):
         pass
+    def close(self):
+        pass
 
 
-### subclass for collecting and displaying online statistics
+### subclasses for collecting and/or displaying 
 
-class StatusBoard(Stats):
-    '''
-    class with live feed of the robot's sensors data and actuators parameters, and a video feed (if available)
-    '''
-    def __init__(self, id: str, sensors: dict, actuators: dict, video = None):
-        '''
-        init the status board. It is a floating panel.
-            sensors: the sensors to display in a dictionary form (name - value (float)) 
-            actuators: the actuators to display, dictionary form (name - value (float))
-            video: the video feed to display, if available
-        '''
-        super().__init__()
-        self.id = id
-        self.sensors = sensors
-        len_sensors = len(sensors) if sensors else 0
-        self.actuators = actuators
-        len_actuators = len(actuators) if actuators else 0
-        self.video = video
-
-        if self.video != None:
-            _, video_width, _= self.video.shape
-            n = 1
-        else:
-            video_width = 0
-            n = 0
-
-        column_width = 160
-        panel_height = 80 
-        panel_width = max(video_width, (max(len_sensors - n, len_actuators))*column_width+20)
-        self.panel = np.zeros((panel_height, panel_width, 3), dtype=np.uint8)
-
-
-    def update(self, sensors: dict, actuators: dict, video = None):
-        self.sensors = sensors
-        self.actuators = actuators
-        self.video = video
-
-    def show(self):
-        self.panel.fill(0) # clear the panel
-
-        if self.video != None:
-            # convert RGBA if necessary
-            if self.video.shape[2] == 4:
-                frame = cv2.cvtColor(self.video, cv2.COLOR_RGBA2BGR)
-            if frame.shape[1] != self.width:
-                frame = cv2.resize(frame, (self.width, int(frame.shape[0] * (self.width / frame.shape[1]))))
-        else: 
-            frame = np.zeros((1, self.width, 3), dtype=np.uint8)
-
-        # Add the HUD Text
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        color = (255, 255, 255)
-
-        def draw_dict(data, y_pos):
-            x_offset = 10
+class StatusBoard(QWidget):
+    def __init__(self, name, obj):
+        # 1. Initialize the Qt Application if it hasn't been started
+        self.app = QApplication.instance()
+        if self.app is None:
+            self.app = QApplication(sys.argv)
             
-            for key, value in data.items():
-                if value.__class__ != float: continue # skip non-float values 
-                
-                text = f"{key}: {value:.2f}"
-                cv2.putText(self.panel, text, (x_offset, y_pos), font, 0.5, color, 1, cv2.LINE_AA)
-                
-                x_offset += self.column_width
-                # Wrap text to next line if it exceeds width
-                if x_offset > self.width - self.column_width:
-                    x_offset = 10
-                    y_pos += 20 
-            return y_pos
-
-        # Draw Observations on the first line(s)
-        current_y = draw_dict(self.sensors, 25)
+        super().__init__()
+        self.setWindowTitle(f"{name} Pilot View")
+        self.robot = obj
         
-        # Draw Actions on the next line(s)
-        draw_dict(self.actuators, current_y + 25)
+        # Safely extract dictionaries
+        self.sensors = getattr(obj, 'sensors', {})
+        self.actuators = getattr(obj, 'actuators', {})
 
-        # Show the combined view 
-        combined_view = np.vstack((self.panel, frame))
-        cv2.imshow(f"{self.id}: Pilot View", combined_view)
-        cv2.waitKey(1)
+        if not self.sensors and not self.actuators:
+            raise ValueError("Status Board fail: no data to display")
+
+        # 2. Safely locate the camera 
+        self.camera = None
+        for sensor in self.sensors.values():
+            if type(sensor).__name__ == 'CameraSensor':
+                self.camera = sensor
+                break
+
+        # 3. Build the UI Layout
+        main_layout = QVBoxLayout()
+
+        # HUD / Text Panel
+        self.hud_group = QGroupBox("Telemetry")
+        hud_layout = QVBoxLayout()
+        self.text_label = QLabel("Waiting for data...")
+        self.text_label.setWordWrap(True)  # Automatically wraps long lists of sensor data!
+        self.text_label.setStyleSheet("font-family: monospace; font-size: 12pt;")
+        hud_layout.addWidget(self.text_label)
+        self.hud_group.setLayout(hud_layout)
+        main_layout.addWidget(self.hud_group)
+
+        # Video Panel
+        if self.camera:
+            self.video_label = QLabel("No signal")
+            self.video_label.setAlignment(Qt.AlignCenter)
+            self.video_label.setStyleSheet("background-color: black; color: white;")
+            main_layout.addWidget(self.video_label)
+
+        self.setLayout(main_layout)
+        
+        # Set minimum width so the HUD text has room to breathe
+        self.setMinimumWidth(800)
+        self.show()
+
+    def update(self):
+        """Called by your external main loop to fetch data and refresh the UI."""
+        
+        # 1. Update Text HUD
+        hud_lines = ["<b>Sensors:</b>"]
+        for name, sensor in self.sensors.items():
+            if sensor is self.camera:
+                continue
+                
+            # Because of your SensorArray, we just call get_data() directly
+            data = sensor.get_data()
+            hud_lines.append(self._format_data(name, data))
+
+        hud_lines.append("<br><b>Actuators:</b>")
+        for name, actuator in self.actuators.items():
+            data = actuator.get_value()
+            hud_lines.append(self._format_data(name, data))
+
+        # Join the lines with HTML breaks and update the label
+        self.text_label.setText("<br>".join(hud_lines))
+
+        # 2. Update Video Feed
+        if self.camera:
+            frame = self.camera.get_data()
+            if frame is not None:
+                # Convert from OpenCV (BGR/BGRA) to PyQt (RGB)
+                if len(frame.shape) == 3:
+                    if frame.shape[2] == 4:
+                        frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2RGB)
+                    else:
+                        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                
+                h, w, ch = frame.shape
+                bytes_per_line = ch * w
+                
+                # Create QImage and display it
+                q_img = QImage(frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
+                self.video_label.setPixmap(QPixmap.fromImage(q_img))
+
+        # 3. Process events to keep UI responsive
+        # This replaces cv2.waitKey(1)
+        self.app.processEvents()
+
+    def _format_data(self, name, data):
+        """Helper method to cleanly format single values or arrays of values."""
+        if isinstance(data, (list, tuple, np.ndarray)):
+            # Format lists (e.g. from SensorArray)
+            string_data = ', '.join(f"{d:.2f}" for d in data if isinstance(d, (int, float)))
+        elif isinstance(data, (int, float)):
+            # Format single floats
+            string_data = f"{data:.2f}"
+        else:
+            # Fallback for strings, booleans, or None
+            string_data = str(data)
+            
+        return f"&nbsp;&nbsp;{name}: {string_data}"
+
+
+class DataLogger:
+    """
+    Collects sensor and actuator data (excluding cameras) and writes it to a CSV file.
+    Creates flattened headers for array-based sensors (e.g., lidars -> lidar_0, lidar_1).
+    """
+    def __init__(self, obj, log_dir="."):
+        self.robot = obj
+        self.sensors = getattr(obj, 'sensors', {})
+        self.actuators = getattr(obj, 'actuators', {})
+        
+        # Ensure the log directory exists
+        os.makedirs(log_dir, exist_ok=True)
+        
+        # Generate a timestamped filename
+        start_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.filepath = os.path.join(log_dir, f"telemetry_{start_time}.csv")
+        
+        # Initialize headers
+        self.headers = ["timestamp"]
+        self._build_headers()
+        
+        # Keep the file open for fast, continuous writing during the simulation loop
+        self.file = open(self.filepath, mode='w', newline='')
+        self.writer = csv.writer(self.file)
+        self.writer.writerow(self.headers)
+        
+        print(f"DataLogger initialized. Logging to: {self.filepath}")
+
+    def _build_headers(self):
+        """Samples the data once at startup to create accurate CSV columns."""
+        # 1. Map Sensor columns
+        for name, sensor in self.sensors.items():
+            if type(sensor).__name__ == 'CameraSensor':
+                continue
+                
+            data = sensor.get_data()
+            if isinstance(data, (list, tuple)):
+                # If it's a SensorArray returning a list, create a column for each item
+                for i in range(len(data)):
+                    self.headers.append(f"{name}_{i}")
+            else:
+                self.headers.append(name)
+
+        # 2. Map Actuator columns
+        for name, actuator in self.actuators.items():
+            data = actuator.get_value()
+            if isinstance(data, (list, tuple)):
+                for i in range(len(data)):
+                    self.headers.append(f"{name}_{i}")
+            else:
+                self.headers.append(name)
+
+    def update(self):
+        """Fetches current data and writes a single row to the CSV."""
+        # Get current time down to the microsecond
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
+        row = [current_time]
+        
+        # 1. Fetch Sensor data
+        for name, sensor in self.sensors.items():
+            if type(sensor).__name__ == 'CameraSensor':
+                continue
+                
+            data = sensor.get_data()
+            self._append_data(row, data)
+            
+        # 2. Fetch Actuator data
+        for name, actuator in self.actuators.items():
+            data = actuator.get_value()
+            self._append_data(row, data)
+            
+        # Write the row immediately
+        self.writer.writerow(row)
+
+    def _append_data(self, row, data):
+        """Helper to flatten lists into the CSV row."""
+        if isinstance(data, (list, tuple)):
+            row.extend(data)
+        else:
+            row.append(data)
+
+    def close(self):
+        """Closes the file. Call this when shutting down your simulation!"""
+        if not self.file.closed:
+            self.file.close()
+            print("DataLogger safely closed.")

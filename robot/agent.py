@@ -1,5 +1,6 @@
 # parent class for an agent that thinks
 
+from tkinter import SE
 from turtle import distance
 
 from communicator import Communicator
@@ -37,17 +38,17 @@ class SimpleAgent(Agent):
         super().__init__(bus)
         # Initialize sensors and actuators here
         self.wheels = WheelsActuator(self.bus)
-        self.lidar = [LidarSensor(self.bus, ang) for ang in [17, 50, 90, 150, 210, 270, 310, 343]]
+        self.lidars = VirtualSensorArray(self.bus, [LidarSensor(self.bus, ang) for ang in [17, 50, 90, 150, 210, 270, 310, 343]])
         self.cctv = CameraSensor(self.bus)
         
     def read_state(self):
-        distances = [sensor.read() for sensor in self.lidar]
+        distances = [sensor.read() for sensor in self.lidars.sensors]
         # are we in danger?
         duck = (min(distances) != max(distances))
         # Where is nearest obstacle?
         idx = distances.index(min(distances))
-        ang = self.lidar[idx].lidar_direction
-        dist = self.lidar[idx].value
+        ang = self.lidars.sensors[idx].lidar_direction
+        dist = self.lidars.sensors[idx].value
         return duck, ang, dist
 
     def run(self):
@@ -74,41 +75,41 @@ class SkilledAgent(Agent):
         super().__init__(bus)
         # Initialize sensors and actuators here
         self.wheels = WheelsActuator(self.bus)
-        self.lidar = [LidarSensor(self.bus, ang) for ang in [17, 50, 90, 150, 210, 270, 310, 343]]
+        self.lidars = VirtualSensorArray(self.bus, [LidarSensor(self.bus, ang) for ang in [17, 50, 90, 150, 210, 270, 310, 343]])
         self.cctv = CameraSensor(self.bus)
+            # common parameters:
+        min_dist = 0.05
+        velocity = 10
         self.skillset = {
-            'MoveForward': MoveForward(self.lidar[0], self.lidar[7], self.wheels, 10, 0.01),
-            'TurnRight': TurnRight(self.lidar[0], self.lidar[7], self.wheels, 10, 0.01),
-            'TurnLeft': TurnLeft(self.lidar[0], self.lidar[7], self.wheels, 10, 0.01)
+            'MoveForward': MoveForward(self.lidars.sensors[0], self.lidars.sensors[7], self.wheels, velocity, min_dist),
+            'TurnRight': TurnRight(self.lidars.sensors[0], self.lidars.sensors[7], self.wheels, velocity, min_dist),
+            'TurnLeft': TurnLeft(self.lidars.sensors[0], self.lidars.sensors[7], self.wheels, velocity, min_dist),
+            'TurnAway': TurnAway(self.lidars.sensors[0], self.lidars.sensors[7], self.lidars.sensors[2], self.lidars.sensors[5], self.wheels, velocity, min_dist),
+            'OpenDoor': OpenDoor(self.lidars.sensors[0], self.lidars.sensors[7], self.lidars.sensors[2], self.wheels, velocity, min_dist, timeout=10.0)
             }
         
     def read_state(self):
-        distances = [sensor.read() for sensor in self.lidar]
-        # are we in danger?
-        duck = (min(distances) != max(distances))
-        # Where is nearest obstacle?
-        idx = distances.index(min(distances))
-        ang = self.lidar[idx].lidar_direction
-        dist = self.lidar[idx].value
+        '''Read the current state of the agent and return if there is a danger in front of us, at what angle and distance '''
+        distances = [sensor.read() for sensor in self.lidars.sensors]
+        # are we in danger? we have to duck if there is anything in front of us:
+        duck = False
+        ang = None
+        dist = None
+        for sensor in self.lidars.sensors:
+            if (sensor.lidar_direction < 45 or sensor.lidar_direction > 315) and sensor.value < 0.07:
+                duck = True
+                ang = sensor.lidar_direction
+                dist = sensor.value
+                break
         return duck, ang, dist
 
     def run(self):
         while True:
-            duck, ang, dist = self.read_state()
-            self.skillset['TurnRight'].execute()
-            time.sleep(2)
-            self.skillset['TurnLeft'].execute()
-            time.sleep(2)
-            self.skillset['MoveForward'].execute()
+            duck, _, _= self.read_state()
+            self.cctv.read()
             if duck:
-                if ang < 180: 
-                    self.skillset['TurnRight'].execute()
-                else:
-                    self.skillset['TurnLeft'].execute()
+                if not self.skillset['TurnAway'].execute():
+                    print("TurnAway failed :(")
             else:
                 self.skillset['MoveForward'].execute()
 
-            frame = self.cctv.read()
-
-            cv2.imshow(f"Pilot View", frame)
-            cv2.waitKey(1) 

@@ -41,18 +41,12 @@ class Environment():
             obj.setID(obj_id)
             obj.set_communicator(com)
 
-    def sense(self):
-        '''
-        run the sensors of all objects in the environment
-        '''
-        for obj in self.objects:
-            if obj.sensors is not None:
-                obj.sense()
+    def update(self):
+        for stat in self.stats:
+            stat.update()
 
-    def act(self):
-        '''
-        run the actuators of all objects in the environment
-        '''
-        for obj in self.objects:
-            if obj.actuators is not None:
-                obj.act()
+    def close(self):
+        p.disconnect()
+        for stat in self.stats:
+            stat.close()
+

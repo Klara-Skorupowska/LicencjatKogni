@@ -6,18 +6,32 @@ from communicator import Communicator
 class RealActuator():
     def __init__(self):
         self.bus = None
+        self.robot_id = None
+
+    def __init__(self, bus: Communicator):
+        self.bus = bus
+        self.robot_id = None
+
+    def set_communicator(self, bus: Communicator):
+        self.bus = bus
 
     def act(self):
         ''' used for changing parameters manually '''
         raise NotImplementedError("The act() method must be implemented in the subclass.") 
 
+class RealActuatorArray(RealActuator):
+    def __init__(self, bus: Communicator, actuators: list[RealActuator]):
+        super().__init__(bus)
+        self.actuators = actuators
+    def act(self, value):
+        ''' used for changing parameters manually. each one get the same value(s)'''
+        for actuator in self.actuators:
+            actuator.act(value)
 
 # wheels
 class WheelsActuator(RealActuator):
     def __init__(self, bus: Communicator):
-        super().__init__()
-        self.bus = bus
-        self.robot_id = None
+        super().__init__(bus)
         self.left_wheel_joint_index = None
         self.right_wheel_joint_index = None
         self.max_velocity = 20.0
@@ -59,8 +73,11 @@ class WheelsActuator(RealActuator):
             force = self.max_force
         )
 
-    def act(self, left_wheel_velocity, right_wheel_velocity):
-        ''' manual way of changing velocities '''
+    def act(self, values):
+        ''' manual way of changing velocities.
+        values - a list of 2 floats: [left_wheel_velocity, right_wheel_velocity]
+        '''
+        left_wheel_velocity, right_wheel_velocity = values
         p.setJointMotorControl2(
             bodyIndex=self.robot_id,
             jointIndex=self.left_wheel_joint_index, 
@@ -75,3 +92,7 @@ class WheelsActuator(RealActuator):
             targetVelocity=right_wheel_velocity,
             force = self.max_force
         )
+
+    def get_value(self):
+        ''' returns the current velocities of the wheels '''
+        return [self.left_wheel_velocity, self.right_wheel_velocity]

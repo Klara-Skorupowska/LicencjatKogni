@@ -12,6 +12,13 @@ class VirtualSensor():
     def read(self): # from the bus
         raise NotImplementedError("The read() method must be implemented in the subclass.")
 
+class VirtualSensorArray(VirtualSensor):
+    def __init__(self, bus: Communicator, sensors: list[VirtualSensor]):
+        super().__init__(bus)
+        self.sensors = sensors
+    def read(self):
+        return [sensor.read() for sensor in self.sensors]
+
 class LidarSensor(VirtualSensor):
     def __init__(self, bus: Communicator, lidar_direction):
         '''

@@ -7,15 +7,34 @@ import numpy as np
 import cv2
 
 class RealSensor():
+    def __init__(self):
+        self.bus = None
+        self.robot_id = None
+
     def __init__(self, bus: Communicator):
         self.bus = bus
         self.robot_id = None
+
+    def set_communicator(self, bus: Communicator):
+        self.bus = bus
+
     def sense():
         ''' getting data from the environment '''
         raise NotImplementedError("The sense() method must be implemented in the subclass.")  
     def get_data():
         ''' getting data from within the class '''
         raise NotImplementedError("The get_data() method must be implemented in the subclass.")  
+
+class RealSensorArray(RealSensor):
+    def __init__(self, bus: Communicator, sensors: list[RealSensor]):
+        super().__init__(bus)
+        self.sensors = sensors
+    def sense(self):
+        ''' getting data from the environment '''
+        return [sensor.sense() for sensor in self.sensors]
+    def get_data(self):
+        ''' getting data from within the class '''
+        return [sensor.get_data() for sensor in self.sensors]
 
 class CameraSensor(RealSensor):
     def __init__(self, bus: Communicator, res: tuple[int, int, int]):

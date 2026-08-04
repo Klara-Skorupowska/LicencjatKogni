@@ -1,5 +1,6 @@
 ### parent class for all environment objects
 import xacro
+import numpy as np
 from communicator import Communicator
 
 class Object():
@@ -30,15 +31,25 @@ class Object():
         # set communicator for sensors and actuators if they exist
         if self.sensors is not None:
             self.bus = bus
-            for sensor in self.sensors:
-                sensor.set_communicator(self.bus)
+            for sensor in self.sensors.values():
+                if isinstance(sensor, (list, tuple, np.ndarray)):
+                    for s in sensor:
+                        s.set_communicator(self.bus)
+                else:
+                    sensor.set_communicator(self.bus)
         if self.actuators is not None:
             self.bus = bus
-            for actuator in self.actuators:
-                actuator.set_communicator(self.bus)
+            for actuator in self.actuators.values():
+                if isinstance(actuator, list):
+                    for a in actuator:
+                        a.set_communicator(self.bus)
+                else:
+                    actuator.set_communicator(self.bus)
 
     def sense(self):
         raise NotImplementedError("The sense() method must be implemented in the subclass.")
     def act(self):
         raise NotImplementedError("The act() method must be implemented in the subclass.")
+    def get_value(self):
+        raise NotImplementedError("The get_value() method must be implemented in the subclass.")
 
