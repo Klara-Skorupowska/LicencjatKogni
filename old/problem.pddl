@@ -1,6 +1,0 @@
-(define (problem find-door)
-          (:domain epuck-arena)
-          (:objects epuck2 - robot)
-          (:init (obstacle-ahead epuck2))
-          (:goal (door-ahead epuck2))
-        )
