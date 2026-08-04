@@ -4,7 +4,6 @@
 import threading
 import time
 import pybullet as p
-import pybullet_data
 
 from simulation import simulation_loop
 from robot import agent_loop

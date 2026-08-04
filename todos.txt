@@ -13,7 +13,7 @@
 ### 28.07.2026 ###
 [o] napisać skille
 [o] poprawić statusboard  
-[] dodać zbieranie statystyk
+[o] dodać zbieranie statystyk
 [] podłączyć sieci
 
 ### 22.07.2026 ###

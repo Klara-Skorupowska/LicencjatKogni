@@ -12,45 +12,60 @@ class Skill():
     def __init__(self):
         pass
 
-    def execute():
+    def execute(self):
         ''' executes the skill from start to finish and returns if the execution was completed '''
         raise NotImplementedError("The execute() method must be implemented in the subclass.") 
 
 
 
 ### --- EXTRA CALCULATIONS FOR EPUCK2   --- ###
-T_90_CONST = math.pi*0.052/(4*0.02) 
+T_CONST = math.pi*0.052/(0.02)  # based on epuck2 (wheel radius and distance between them), needed to be devided by the velocity to get the time needed to turn 360 deg
 ### ---                                 --- ###
 class MoveForward(Skill):
     ''' moves forward until it aproaches a wall '''
-    def __init__(self, lidar_forward_left: LidarSensor, lidar_forward_right: LidarSensor, wheels: WheelsActuator, velocity: float, min_dist: float):
+    def __init__(self, lidar_forward_left: LidarSensor, lidar_forward_right: LidarSensor, wheels: WheelsActuator, velocity: float, min_dist: float, time: float = 5.0):
         '''
         lidar_forward_left - a lidar with angle (0-30) deg
         lidar_forward_right - a lidar with angle (330-360) deg
         wheels - a set of wheels
         min_dist - a minimal ditance from the obstacle (in meters)
         velocity 
+        time - the time of moving forward (in seconds)
         '''
         super().__init__()
-        self.lidar_fl = lidar_forward_left
-        self.lidar_fr = lidar_forward_right
+        self.lidar_forward_left = lidar_forward_left
+        self.lidar_forward_right = lidar_forward_right
         self.wheels = wheels
 
         self.velocity = velocity
         self.min_dist = min_dist
+        self.time = time
 
     def execute(self):
         self.wheels.set_parameters([self.velocity, self.velocity])
-        while True:
-            if self.lidar_fl.read() < self.min_dist or self.lidar_fr.read() < self.min_dist: 
+        start_time = time.time()
+        
+        while time.time() - start_time < self.time:
+            # 1. Take a snapshot of the sensors
+            front_left = self.lidar_forward_left.read()
+            front_right = self.lidar_forward_right.read()
+
+            # 2. Check if we have approached a wall
+            if front_left < self.min_dist or front_right < self.min_dist:
                 self.wheels.set_parameters([0.0, 0.0]) # halt
-                return True
+                return True # completed moving forward until hitting a wall
+                
+            # 3. Yield to the CPU
+            time.sleep(0.01)
+            
+        # If we reach this point, the timeout expired before finding a wall = no need for halting, as we are still moving forward
+        return True  # completed moving forward without hitting a wall
 
 class TurnLeft(Skill):
     '''
-    left turn 90 deg
+    left turn for set time
     '''
-    def __init__(self, lidar_forward_left: LidarSensor, lidar_forward_right: LidarSensor, wheels: WheelsActuator, velocity: float, min_dist: float):
+    def __init__(self, lidar_forward_left: LidarSensor, lidar_forward_right: LidarSensor, wheels: WheelsActuator, velocity: float, min_dist: float, time: float = 1.0):
         '''
         lidar_forward_left - a lidar with angle (0-30) deg
         lidar_forward_right - a lidar with angle (330-360) deg
@@ -65,11 +80,11 @@ class TurnLeft(Skill):
 
         self.velocity = velocity
         self.min_dist = min_dist
-        self.turn_duration =T_90_CONST/velocity # calculations based on epuck2 (wheel radius and distance between them) 
+        self.time = time
 
     def execute(self):
         start_time = time.time()
-        while time.time() - start_time < self.turn_duration:
+        while time.time() - start_time < self.time:
             self.wheels.set_parameters([-self.velocity, self.velocity])
             time.sleep(0.01)  # Prevent CPU spinning
 
@@ -78,9 +93,9 @@ class TurnLeft(Skill):
 
 class TurnRight(Skill):
     '''
-    right turn 90 deg
+    right turn for set time
     '''
-    def __init__(self, lidar_forward_left: LidarSensor, lidar_forward_right: LidarSensor, wheels: WheelsActuator, velocity: float, min_dist: float):
+    def __init__(self, lidar_forward_left: LidarSensor, lidar_forward_right: LidarSensor, wheels: WheelsActuator, velocity: float, min_dist: float, time: float = 1.0):
         '''
         lidar_forward_left - a lidar with angle (0-30) deg
         lidar_forward_right - a lidar with angle (330-360) deg
@@ -95,11 +110,11 @@ class TurnRight(Skill):
 
         self.velocity = velocity
         self.min_dist = min_dist
-        self.turn_duration = T_90_CONST/velocity # calculations based on epuck2 (wheel radius and distance between them) 
+        self.time = time
 
     def execute(self):
         start_time = time.time()
-        while time.time() - start_time < self.turn_duration:
+        while time.time() - start_time < self.time:
             self.wheels.set_parameters([self.velocity, -self.velocity])
             time.sleep(0.01)  # Prevent CPU spinning
 
@@ -131,50 +146,80 @@ class TurnAway(Skill):
         self.min_dist = min_dist
 
     def execute(self):
-        # calculate how long it takes to do a full turn (360 deg) based on the robot's parameters:
-        full_circle_time = 4 * T_90_CONST / self.velocity 
-        # the epsilon is acceptable error in distance to the obstacle 
-        epsilon = 0.01
-        # get the direction of the nearest obstacle (left or right) based on the front lidars:
-        if self.lidar_front_left.read() < self.lidar_front_right.read():
+        # 1. Find nearest obstacle
+        front_left= self.lidar_front_left.read()
+        front_right = self.lidar_front_right.read()
+
+        if front_left < front_right:
             turn_direction = 'right'
-            distance = self.lidar_front_left.read()
+            target_distance = front_left
+            # If turning right (clockwise), the obstacle slides down the left side (CCW relative to robot)
+            front_tracker = self.lidar_front_left
+            back_tracker = self.lidar_back_left
         else:
             turn_direction = 'left'
-            distance = self.lidar_front_right.read()
+            target_distance = front_right
+            # If turning left (CCW), the obstacle slides down the right side (CW relative to robot)
+            front_tracker = self.lidar_front_right
+            back_tracker = self.lidar_back_right
 
-        # turn until the distance from the front lidar appears on the back lidars (i.e. the obstacle is now behind us)
+        # 2. Initiate turn
+        if turn_direction == 'right':
+            self.wheels.set_parameters([self.velocity, -self.velocity])
+        else:
+            self.wheels.set_parameters([-self.velocity, self.velocity])
+
+        full_circle_time = T_CONST / self.velocity
+        epsilon = 0.01
         start_time = time.time()
+        
+        front_cleared = False 
+
         while time.time() - start_time < full_circle_time:
-            if turn_direction == 'right':
-                self.wheels.set_parameters([self.velocity, -self.velocity])
-                if self.lidar_back_left.read() < distance + epsilon or self.lidar_back_left.read() > distance - epsilon:
-                    self.wheels.set_parameters([0.0, 0.0]) # halt
-                    return True
-            else:
-                self.wheels.set_parameters([-self.velocity, self.velocity])
-                if self.lidar_back_right.read() < distance + epsilon or self.lidar_back_right.read() > distance - epsilon: # the obstacle is now behind us
-                    self.wheels.set_parameters([0.0, 0.0]) # halt
-                    return True
+            # Snapshot required lidars
+            current_front = front_tracker.read()
+            current_back = back_tracker.read()
+            
+            current_front_left = self.lidar_front_left.read()
+            current_front_right = self.lidar_front_right.read()
+
+            # Step A: Check if we have rotated enough for the obstacle to leave the front sensor
+            if not front_cleared:
+                if abs(current_front - target_distance) >= epsilon:
+                    front_cleared = True
+
+            # Step B: If front is clear, check if the obstacle has reached the back sensor
+            obstacle_is_behind = False
+            if front_cleared:
+                obstacle_is_behind = abs(current_back - target_distance) <= epsilon
                 
-            time.sleep(0.01)  # Prevent CPU spinning
+            # Step C: Ensure our new path is safe
+            path_is_clear = (current_front_left > self.min_dist) and (current_front_right > self.min_dist)
+
+            # Step D: Exit condition
+            if obstacle_is_behind and path_is_clear:
+                self.wheels.set_parameters([0.0, 0.0]) # halt
+                return True
+                
+            time.sleep(0.01)
+
+        # Timeout reached (completed 360 turn without finding a clear path)
         self.wheels.set_parameters([0.0, 0.0])
-        return False  # failed to turn away from the obstacle
+        return False
 
 class OpenDoor(Skill):
     '''
-    opens a door by moving forward until the door is detected by the left lidars and not the front ones.
+    Opens a door by moving forward until the door is detected by the left lidars 
+    and not the front ones.
     '''
-    def __init__(self, lidar_front_left: LidarSensor, lidar_front_right: LidarSensor, lidar_left: LidarSensor, wheels: WheelsActuator, velocity: float, min_dist: float, timeout: float = 10.0):
-        '''
-        lidar_front_left - a lidar with angle (0-30) deg
-        lidar_front_right - a lidar with angle (330-360) deg
-        lidar_left - a lidar with angle (60-120) deg
-        wheels - a set of 2 wheels
-        min_dist - a minimal ditance from the obstacle (in meters)
-        velocity - the speed at which the robot should move
-        timeout - the maximum time to attempt opening the door (in seconds)
-        '''
+    def __init__(self, 
+                 lidar_front_left: LidarSensor, 
+                 lidar_front_right: LidarSensor, 
+                 lidar_left: LidarSensor, 
+                 wheels: WheelsActuator, 
+                 velocity: float, 
+                 min_dist: float, 
+                 timeout: float = 10.0):
         super().__init__()
         self.lidar_front_left = lidar_front_left
         self.lidar_front_right = lidar_front_right
@@ -185,11 +230,33 @@ class OpenDoor(Skill):
         self.timeout = timeout
 
     def execute(self):
+        # Start moving forward
         self.wheels.set_parameters([self.velocity, self.velocity])
         start_time = time.time()
-        while time.time() - start_time < self.timeout:  # give it max. timeout seconds to open the door
-            if self.lidar_left.read() < self.min_dist and self.lidar_front_left.read() > self.min_dist and self.lidar_front_right.read() > self.min_dist:
+
+        front_left_dist = self.lidar_front_left.read()
+        front_right_dist = self.lidar_front_right.read()
+
+        if front_left_dist > self.min_dist and front_right_dist > self.min_dist:
+            return False  # No door detected in front, cannot open
+        
+        while time.time() - start_time < self.timeout:
+            # 1. Take a simultaneous snapshot of all required sensors
+            left_dist = self.lidar_left.read()
+            front_left_dist = self.lidar_front_left.read()
+            front_right_dist = self.lidar_front_right.read()
+            
+            # 2. Evaluate the snapshot
+            door_on_left = left_dist < self.min_dist
+            front_is_clear = (front_left_dist > self.min_dist) and (front_right_dist > self.min_dist)
+            
+            if door_on_left and front_is_clear:
                 self.wheels.set_parameters([0.0, 0.0]) # halt
-                return True
+                return True # there was a door and we opened it successfully
+                
+            # 3. Yield to the CPU
+            time.sleep(0.01)
+            
+        # Timeout reached
         self.wheels.set_parameters([0.0, 0.0])
-        return False  # failed to open the door within the timeout period
+        return False # there was a door but we failed to open it in time

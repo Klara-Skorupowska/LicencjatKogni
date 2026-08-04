@@ -8,7 +8,7 @@ def simulation_loop(bus: Communicator, setup_complete_event):
     print("[Physics] Starting world clock...")
     print("Loading environment...")
     robot = RealRobot(bus) ### choose your robot here)
-    world = Environment([robot, Arena()], [StatusBoard("Waldek", robot), DataLogger(robot, log_dir="./logs")]) ### choose your world here (arena, stats)
+    world = Environment([robot, Arena()], [StatusBoard("Robot_1", robot), DataLogger(robot, log_dir="./logs")]) ### choose your world here (arena, stats)
     time_step = 1.0 / 240.0
     world.setup(bus, time_step)
     setup_complete_event.set()

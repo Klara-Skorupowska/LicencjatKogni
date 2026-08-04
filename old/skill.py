@@ -1,4 +1,3 @@
-from tkinter import SE
 
 
 class Skill():

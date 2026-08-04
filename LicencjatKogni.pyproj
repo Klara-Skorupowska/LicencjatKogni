@@ -25,6 +25,7 @@
   <ItemGroup>
     <Compile Include="robot\agent.py" />
     <Compile Include="robot\agent_loop.py" />
+    <Compile Include="robot\brain_network.py" />
     <Compile Include="robot\skills.py" />
     <Compile Include="robot\virtual_actuator.py" />
     <Compile Include="robot\virtual_sensor.py" />
@@ -39,12 +40,6 @@
     <Compile Include="simulation\simulation_loop.py" />
     <Compile Include="simulation\stats.py" />
     <Compile Include="main.py" />
-    <Compile Include="old\body.py" />
-    <Compile Include="old\brain.py" />
-    <Compile Include="old\robot.py" />
-    <Compile Include="old\skill.py" />
-    <Compile Include="old\statusboard.py" />
-    <Compile Include="old\WaldekTheRobot.py" />
     <Compile Include="simulation\__init__.py" />
   </ItemGroup>
   <ItemGroup>
@@ -71,12 +66,10 @@
     <Folder Include="models\" />
     <Folder Include="models\urdfs\" />
     <Folder Include="simulation\" />
-    <Folder Include="old\" />
     <Folder Include="robot\" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="models\cube.xacro" />
-    <Content Include="old\domain.pddl" />
     <Content Include="models\arena.xacro" />
     <Content Include="models\arena_GoForward.xacro" />
     <Content Include="models\arena_OpenDoor.xacro" />
@@ -85,7 +78,6 @@
     <Content Include="models\urdfs\arena_GoForward.urdf" />
     <Content Include="models\urdfs\arena_OpenDoor.urdf" />
     <Content Include="models\urdfs\epuck2.urdf" />
-    <Content Include="old\problem.pddl" />
     <Content Include="todos.txt" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />

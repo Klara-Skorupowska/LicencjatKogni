@@ -3,8 +3,6 @@
 
 import pybullet as p
 import pybullet_data
-import time
-import cv2
 
 from .object import Object
 from .stats import *
