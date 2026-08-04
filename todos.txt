@@ -9,12 +9,15 @@
 () - zrobione, a nie było planowane
 ---------------------------------------
 ---------------------------------------
+### 04.08.2026 ###
+[] dodać statystyki sieci
+[] przygotować funckcje 'explore': nowy node nie przy treshold tylko jeśli nie udało nam się poprawnie przewidzieć gdzie wylądujemy
 
 ### 28.07.2026 ###
 [o] napisać skille
 [o] poprawić statusboard  
 [o] dodać zbieranie statystyk
-[] podłączyć sieci
+[o] podłączyć sieci
 
 ### 22.07.2026 ###
 [o] uporządkować moduły w oparciu o nowy plan (świat, mózg, sensory, aktuatory)

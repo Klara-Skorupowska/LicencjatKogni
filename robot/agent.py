@@ -7,6 +7,8 @@ from .skills import *
 from .brain_network import *
 
 import cv2
+import numpy as np
+import random
 
 class Agent:
     def __init__(self, communicator: Communicator):
@@ -85,20 +87,16 @@ class SkilledAgent(Agent):
             }
         
     def read_state(self):
-        '''Read the current state of the agent and return if there is a danger in front of us, at what angle and distance '''
+        '''Read the current state of the agent and return if there is a danger in front of us - two possible states '''
         # are we in danger? we have to duck if there is anything in front of us:
         duck = False
-        ang = None
-        dist = None
         self.lidars.read()
-        self.cctv.read()
+        self.cctv.read() # just to update the camera frame, we don't use it here
         for sensor in self.lidars.sensors:
             if (sensor.lidar_direction < 45 or sensor.lidar_direction > 315) and sensor.value < 0.07:
                 duck = True
-                ang = sensor.lidar_direction
-                dist = sensor.value
                 break
-        return duck, ang, dist
+        return duck
 
     def run(self):
         self.read_state()
@@ -116,7 +114,7 @@ class SkilledAgent(Agent):
            print("TurnLeft succeeded :)")    
 
         while True:
-            duck, _, _= self.read_state()
+            duck = self.read_state()
             if duck:
                 if not self.skillset['TurnAway'].execute():
                     print("TurnAway failed :(")
@@ -144,16 +142,62 @@ class TheAgent(Agent):
         velocity = 10
         self.skillset = {
             'MoveForward': MoveForward(self.lidars.sensors[0], self.lidars.sensors[7], self.wheels, velocity, min_dist, time=1.0),
-            'TurnAway': TurnAway(self.lidars.sensors[0], self.lidars.sensors[7], self.lidars.sensors[2], self.lidars.sensors[5], self.wheels, velocity, min_dist),
-            'OpenDoor': OpenDoor(self.lidars.sensors[0], self.lidars.sensors[7], self.lidars.sensors[2], self.wheels, velocity, min_dist, timeout=7.0)
-            }
+            'TurnAway': TurnAway(self.lidars.sensors[0], self.lidars.sensors[7], self.lidars.sensors[2], self.lidars.sensors[5], self.wheels, velocity, min_dist)}
+            #'OpenDoor': OpenDoor(self.lidars.sensors[0], self.lidars.sensors[7], self.lidars.sensors[2], self.wheels, velocity, min_dist, timeout=7.0)
+            #}
         self.brain = BrainNetwork()
 
     def run(self):
-        pass
+        for step in range(1000):
+            # A. Observe the environment BEFORE moving
+            prev_state_id, prev_state_vector = self.read_state()
+    
+            # B. Choose a skill to execute (you could randomize this for exploration)
+
+            # skill = random.choice(list(self.skillset.values()))
+            duck = self.duck()
+            if duck:
+                skill = self.skillset['TurnAway']
+            else:
+                skill = self.skillset['MoveForward']
+    
+            # C. Execute the skill (this blocks until it finishes or times out)
+            success = skill.execute()
+    
+            # D. Observe the environment AFTER moving
+            current_state_id, current_state_vector = self.read_state()
+    
+            # E. Update the Brain!
+            # This automatically updates the GNG nodes and the NetworkX transitional map.
+            self.brain.update(prev_state_vector, skill, current_state_vector)
+    
+            # Print progress every 10 steps
+            if step % 10 == 0:
+                print(f"Step {step}: Brain has {len(self.brain.gng_nodes)} topological nodes and {len(self.brain.transitional_map.edges)} mapped transitions.")
+                
+    def duck(self):
+        duck = False
+        self.lidars.read()
+        for sensor in self.lidars.sensors:
+            if (sensor.lidar_direction < 45 or sensor.lidar_direction > 315) and sensor.value < 0.07:
+                duck = True
+                break
+        return duck
 
     def read_state(self):
-        pass
+        # 1. read sensors
+        self.lidars.read()
+        self.camera.read()
+        # 2. preprocess camera data
+        self.camera.preprocess()
+        # 3. evaluate symbols (not implemented yet)
+        # ...
+        # 4. classify state using brain network
+        # Combine standard Python lists, then make it a NumPy array
+        state_vector = np.array(self.lidars.value + self.camera.coded, dtype=float)
+        self.brain._update_scaling(state_vector)
+        state_id = self.brain.classify(state_vector)
+        return state_id, state_vector
 
     def explore(self):
         pass
