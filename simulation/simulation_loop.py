@@ -6,8 +6,9 @@ from .environment import Environment
 from . real_robot import RealRobot
 from .object import Object 
 from .stats_sim import *
+import threading
 
-def simulation_loop(bus: Communicator, setup_complete_event, robot: RealRobot, arena: Arena, objects:list[Object]=[]):
+def simulation_loop(bus: Communicator, setup_complete_event, robot: RealRobot, arena: Arena, stop_event: threading.Event, objects:list[Object]=[]):
     """Runs continuously at 240Hz, completely independent of the agent."""
     print("[Physics] Starting world clock...")
     print("Loading environment...")
@@ -15,11 +16,12 @@ def simulation_loop(bus: Communicator, setup_complete_event, robot: RealRobot, a
     world = Environment([robot, arena] + objects, stats_sim)
     time_step = 1.0 / 240.0
     world.setup(bus, time_step)
+    robot.set_end_pad_coords(arena.get_end_pad_coords())
     setup_complete_event.set()
     print("Environment loaded.")
     
     try:
-        while True:
+        while not stop_event.is_set():
             p.stepSimulation()
             # update all stats every 1 s:
             if int(time.time()) % 1 == 0:
@@ -30,3 +32,4 @@ def simulation_loop(bus: Communicator, setup_complete_event, robot: RealRobot, a
         print("Simulation stopped by user.")
     finally:
         world.close()
+        print("[Physics] World closed safely.")

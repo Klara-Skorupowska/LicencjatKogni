@@ -25,20 +25,21 @@ def main():
     ### ---- ------ ---------- ---- ---- ###
     # event for waiting for full simulation initialization
     simulation_ready_event = threading.Event()
+    # event for closin' everything
+    stop_event = threading.Event()
     # create threads
-    physics_thread = threading.Thread(target=simulation_loop, args=(bus, simulation_ready_event, robot, arena, ), daemon=True)
-    agent_thread = threading.Thread(target=agent_loop, args=(bus, agent, ), daemon=True)
+    physics_thread = threading.Thread(target=simulation_loop, args=(bus, simulation_ready_event, robot, arena, stop_event, ), daemon=True)
+    agent_thread = threading.Thread(target=agent_loop, args=(bus, agent, stop_event, ), daemon=True)
     # start 
     print("Start Nodes")
     physics_thread.start()
     simulation_ready_event.wait()
     agent_thread.start()
-    try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        print("\nShutting down simulation...")
-        p.disconnect()
+
+    # end 
+    agent_thread.join()
+    physics_thread.join()
+    print("All threads closed cleanly. Exiting program.")
 
 if __name__ == "__main__":
     main()

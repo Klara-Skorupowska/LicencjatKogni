@@ -20,7 +20,7 @@ class BrainNetwork:
         self.epsilon_n = 0.006
         self.max_age = 50
         self.alpha = 0.5  # Error reduction factor
-        self.spawn_threshold = 1000   # Only spawn if the worst error is higher than this
+        self.spawn_threshold = 100   # Only spawn if the worst error is higher than this
         self.beta = 0.995            # Error decay factor per step
         self.step_counter = 0
 
@@ -205,3 +205,65 @@ class BrainNetwork:
                 
         # If no known path matches the skill from the current state
         return None
+
+    def get_symbolic_representation(self):
+        '''
+        Dynamically aggregates the raw GNG and transitional map into Symbolic Preconditions and Effects.
+        Returns dictionaries containing the bounds for PDDL generation.
+        '''
+        from collections import defaultdict
+        
+        # Group raw nodes by the destination they reach via a specific skill
+        precondition_groups = defaultdict(list)
+        # Group raw nodes by where they end up after using a specific skill
+        effect_groups = defaultdict(list)
+        
+        # 1. Map the continuous nodes to abstract functions based on edges
+        for u, v, data in self.transitional_map.edges(data=True):
+            skill = data.get('skill')
+            if skill:
+                precondition_groups[(v, skill)].append(u)
+                effect_groups[(u, skill)].append(v)
+                
+        symbolic_bounds = {
+            'preconditions': {},
+            'effects': {}
+        }
+        
+        # 2. Extract mathematical bounds for Preconditions
+        for (target_node, skill), raw_sources in precondition_groups.items():
+            symbol_name = f"Pre_{skill}_to_{target_node}"
+            
+            # Fetch the actual 21D vectors from the live GNG
+            source_vectors = [self.gng_nodes[n] for n in raw_sources if n in self.gng_nodes]
+            
+            if source_vectors:
+                src_min = np.min(source_vectors, axis=0)
+                src_max = np.max(source_vectors, axis=0)
+                symbolic_bounds['preconditions'][symbol_name] = {
+                    'min': src_min,
+                    'max': src_max,
+                    'raw_nodes': list(set(raw_sources)),
+                    'skill': skill,
+                    'target': target_node
+                }
+                
+        # 3. Extract mathematical bounds for Effects
+        for (source_node, skill), raw_targets in effect_groups.items():
+            symbol_name = f"Eff_{skill}_from_{source_node}"
+            
+            # Fetch the actual 21D vectors from the live GNG
+            target_vectors = [self.gng_nodes[n] for n in raw_targets if n in self.gng_nodes]
+            
+            if target_vectors:
+                tgt_min = np.min(target_vectors, axis=0)
+                tgt_max = np.max(target_vectors, axis=0)
+                symbolic_bounds['effects'][symbol_name] = {
+                    'min': tgt_min,
+                    'max': tgt_max,
+                    'raw_nodes': list(set(raw_targets)),
+                    'skill': skill,
+                    'origin': source_node
+                }
+                
+        return symbolic_bounds

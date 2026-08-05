@@ -5,7 +5,7 @@ from communicator import Communicator
 
 from .object import Object
 from .real_actuator import WheelsActuator
-from .real_sensor import LidarSensor, CameraSensor, RealSensorArray
+from .real_sensor import FinnishSensor, LidarSensor, CameraSensor, RealSensorArray
 
 class RealRobot(Object):
     def __init__(self, bus: Communicator):
@@ -17,16 +17,19 @@ class RealRobot(Object):
         self.bus = bus
         self.sensors = {
             "lidars": RealSensorArray(self.bus, [LidarSensor(self.bus, ang, 0.1) for ang in [17, 50, 90, 150, 210, 270, 310, 343]]),
-            "camera": CameraSensor(self.bus, [240, 320, 3])
+            "camera": CameraSensor(self.bus, [120, 160, 3]),
+            "coords": FinnishSensor(self.bus)
             }
         self.actuators = {
             "wheels": WheelsActuator(self.bus)
         }
+    def set_end_pad_coords(self, finnish_point):
+        self.sensors["coords"].end_pad_coords = finnish_point
 
     def setID(self, id):
         super().setID(id)
-        self.actuators["wheels"].set_id(id)
-        self.sensors["camera"].robot_id = id
-        for laser in self.sensors["lidars"].sensors:
-            laser.robot_id = id
+        for s in self.sensors.values():
+            s.set_robot_id(id)
+        for a in self.actuators.values():
+            a.set_robot_id(id)
         

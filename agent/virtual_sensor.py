@@ -22,6 +22,21 @@ class VirtualSensorArray(VirtualSensor):
         self.value = [sensor.read() for sensor in self.sensors]
         return self.value
 
+class FinnishSensor(VirtualSensor):
+    '''
+    for final check only
+    '''
+    def __init__(self, bus: Communicator):
+        super().__init__(bus)
+        self.value = None
+
+
+    def read(self):
+        self.value = self.bus.call_service(f"/sensor/finnish/sense")
+        if self.value== True: print("Goal achived")
+        return self.value
+
+
 class LidarSensor(VirtualSensor):
     def __init__(self, bus: Communicator, lidar_direction):
         '''

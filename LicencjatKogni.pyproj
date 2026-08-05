@@ -23,6 +23,7 @@
     <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="additional_scripts\brain_viewer.py" />
     <Compile Include="agent\core.py" />
     <Compile Include="agent\agent_loop.py" />
     <Compile Include="agent\brain_network.py" />
@@ -63,13 +64,49 @@
     </Interpreter>
   </ItemGroup>
   <ItemGroup>
+    <Folder Include="logs\" />
     <Folder Include="models\" />
     <Folder Include="models\urdfs\" />
     <Folder Include="additional_scripts\" />
+    <Folder Include="pddl\" />
     <Folder Include="simulation\" />
     <Folder Include="agent\" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include="logs\brain_network_final.graphml" />
+    <Content Include="logs\brain_network_live.graphml" />
+    <Content Include="logs\telemetry_20260805_122536.csv" />
+    <Content Include="logs\telemetry_20260805_125557.csv" />
+    <Content Include="logs\telemetry_20260805_155438.csv" />
+    <Content Include="logs\telemetry_20260805_155508.csv" />
+    <Content Include="logs\telemetry_20260805_161036.csv" />
+    <Content Include="logs\telemetry_20260805_161124.csv" />
+    <Content Include="logs\telemetry_20260805_161159.csv" />
+    <Content Include="logs\telemetry_20260805_161308.csv" />
+    <Content Include="logs\telemetry_20260805_161439.csv" />
+    <Content Include="logs\telemetry_20260805_161647.csv" />
+    <Content Include="logs\telemetry_20260805_161956.csv" />
+    <Content Include="logs\telemetry_20260805_172818.csv" />
+    <Content Include="logs\telemetry_20260805_172856.csv" />
+    <Content Include="logs\telemetry_20260805_173415.csv" />
+    <Content Include="logs\telemetry_20260805_173441.csv" />
+    <Content Include="logs\telemetry_20260805_173453.csv" />
+    <Content Include="logs\telemetry_20260805_173857.csv" />
+    <Content Include="logs\telemetry_20260805_173915.csv" />
+    <Content Include="logs\telemetry_20260805_173949.csv" />
+    <Content Include="logs\telemetry_20260805_174021.csv" />
+    <Content Include="logs\telemetry_20260805_174128.csv" />
+    <Content Include="logs\telemetry_20260805_175120.csv" />
+    <Content Include="logs\telemetry_20260805_175159.csv" />
+    <Content Include="logs\telemetry_20260805_175426.csv" />
+    <Content Include="logs\telemetry_20260805_180543.csv" />
+    <Content Include="logs\telemetry_20260805_204117.csv" />
+    <Content Include="logs\telemetry_20260805_204205.csv" />
+    <Content Include="logs\telemetry_20260805_210944.csv" />
+    <Content Include="logs\telemetry_20260805_214052.csv" />
+    <Content Include="logs\telemetry_20260805_215129.csv" />
+    <Content Include="logs\telemetry_20260805_223222.csv" />
+    <Content Include="logs\telemetry_20260805_223555.csv" />
     <Content Include="models\cube.xacro" />
     <Content Include="models\arena.xacro" />
     <Content Include="models\epuck2.xacro" />
@@ -78,6 +115,18 @@
     <Content Include="models\urdfs\arena_OpenDoor.urdf" />
     <Content Include="models\urdfs\epuck2.urdf" />
     <Content Include="agent\stats_agent.py" />
+    <Content Include="pddl\domain.pddl" />
+    <Content Include="pddl\effect_Approach.txt" />
+    <Content Include="pddl\effect_OpenDoor.txt" />
+    <Content Include="pddl\effect_TurnAway.txt" />
+    <Content Include="pddl\effect_TurnLeft.txt" />
+    <Content Include="pddl\effect_TurnRight.txt" />
+    <Content Include="pddl\precondition_Approach.txt" />
+    <Content Include="pddl\precondition_OpenDoor.txt" />
+    <Content Include="pddl\precondition_TurnAway.txt" />
+    <Content Include="pddl\precondition_TurnLeft.txt" />
+    <Content Include="pddl\precondition_TurnRight.txt" />
+    <Content Include="pddl\problem.pddl" />
     <Content Include="todos.txt" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />

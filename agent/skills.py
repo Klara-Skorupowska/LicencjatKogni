@@ -232,14 +232,14 @@ class OpenDoor(Skill):
     def execute(self):
         # Start moving forward
         self.wheels.set_parameters([self.velocity, self.velocity])
-        start_time = time.time()
-
+        
         front_left_dist = self.lidar_front_left.read()
         front_right_dist = self.lidar_front_right.read()
 
         if front_left_dist > self.min_dist and front_right_dist > self.min_dist:
             return False  # No door detected in front, cannot open
-        
+
+        start_time = time.time()
         while time.time() - start_time < self.timeout:
             # 1. Take a simultaneous snapshot of all required sensors
             left_dist = self.lidar_left.read()

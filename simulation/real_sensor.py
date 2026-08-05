@@ -18,6 +18,9 @@ class RealSensor():
     def set_communicator(self, bus: Communicator):
         self.bus = bus
 
+    def set_robot_id(self, robot_id):
+        self.robot_id = robot_id
+
     def sense():
         ''' getting data from the environment '''
         raise NotImplementedError("The sense() method must be implemented in the subclass.")  
@@ -29,12 +32,42 @@ class RealSensorArray(RealSensor):
     def __init__(self, bus: Communicator, sensors: list[RealSensor]):
         super().__init__(bus)
         self.sensors = sensors
+
+    def set_robot_id(self, robot_id):
+        for s in self.sensors:
+            s.set_robot_id(robot_id)
+
     def sense(self):
         ''' getting data from the environment '''
         return [sensor.sense() for sensor in self.sensors]
     def get_data(self):
         ''' getting data from within the class '''
         return [sensor.get_data() for sensor in self.sensors]
+
+
+class FinnishSensor(RealSensor):
+    def __init__(self, bus: Communicator):
+        super().__init__(bus)
+        self.end_pad_coords = None
+        self.robot_id = None
+        self.value = None
+        self.epsilon = 0.1 # how close they have to be = 10 cm is enough
+
+        self.bus.register_service(f"/sensor/finnish/sense", self.sense)
+
+
+    def sense(self, request=None):
+        ''' This is the Service Handler. It runs ONLY when another node calls bus.call_service("/sensor/absolute_coords/sense"). '''
+        if self.end_pad_coords == None: raise ValueError(f"No finnish point coords")
+        position, _ = p.getBasePositionAndOrientation(self.robot_id)
+        point1 = np.array(position[:2])
+        point2 = np.array(self.end_pad_coords[:2])
+        distance = np.linalg.norm(point1 - point2)
+        self.value = (distance <= self.epsilon)
+        return self.value
+
+    def get_data(self):
+        return self.value
 
 class CameraSensor(RealSensor):
     def __init__(self, bus: Communicator, res: tuple[int, int, int]):

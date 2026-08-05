@@ -15,6 +15,9 @@ class RealActuator():
     def set_communicator(self, bus: Communicator):
         self.bus = bus
 
+    def set_robot_id(self, robot_id):
+        self.robot_id = robot_id
+
     def act(self):
         ''' used for changing parameters manually '''
         raise NotImplementedError("The act() method must be implemented in the subclass.") 
@@ -23,6 +26,11 @@ class RealActuatorArray(RealActuator):
     def __init__(self, bus: Communicator, actuators: list[RealActuator]):
         super().__init__(bus)
         self.actuators = actuators
+
+    def set_robot_id(self, robot_id):
+        for act in self.actuators:
+            act.set_robot_id(robot_id)
+
     def act(self, value):
         ''' used for changing parameters manually. each one get the same value(s)'''
         for actuator in self.actuators:
@@ -41,7 +49,7 @@ class WheelsActuator(RealActuator):
 
         self.bus.subscribe("/cmd/wheels", self.wheels_callback)
 
-    def set_id(self, id):
+    def set_robot_id(self, id):
         self.robot_id = id
         # joint indexes for actuators
         joint_name_to_index = {}

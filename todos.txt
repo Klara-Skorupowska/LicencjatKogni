@@ -9,9 +9,19 @@
 () - zrobione, a nie było planowane
 ---------------------------------------
 ---------------------------------------
+### 05.08.2026 ###
+[] poprawić zapisywanie logów: folder z czasem startu symulacji, czas trwania do znalezienia celu, ile razy wszedł w explore
+[] poprawić zapisywanie pddl: timestamp żeby nie tracić po każdym rerun
+[] program do używania gotowego, tj. re-run z włączonym odczytem tego co już było = pierwszy plan jakiś jest = w idealnym świecie od razu działa, a po zmianie areny po czasie krótszym niż szukanie na oślep
+[] wizualizacje: symbole, sieci
+[] poprawić skill otwierania drzwi bo nie działa -- dodać akcelerometr?
+[] co zrobić aby gdy nie ma celu tworzył działające ścieżki? dokąd powinien iść? na skraj tego co zna. Jak to określić? GNG?
+[] zapisywanie planu zakończonego sukcesem
+
 ### 04.08.2026 ###
-[] dodać statystyki sieci
-[] przygotować funckcje 'explore': nowy node nie przy treshold tylko jeśli nie udało nam się poprawnie przewidzieć gdzie wylądujemy
+[o] dodać statystyki sieci
+[o] przygotować funckcje 'explore': nowy node nie przy treshold tylko jeśli nie udało nam się poprawnie przewidzieć gdzie wylądujemy
+() wszystko tylko bałagan
 
 ### 28.07.2026 ###
 [o] napisać skille
