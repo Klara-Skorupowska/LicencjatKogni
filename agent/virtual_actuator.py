@@ -23,6 +23,9 @@ class WheelsActuator(VirtualActuator):
         super().__init__(bus)
         
     def set_parameters(self, values):
+        '''
+        values = [left, right]
+        '''
         left_wheel, right_wheel = values
         wheel_msg = {"left": left_wheel, "right": right_wheel}
         self.bus.publish("/cmd/wheels", wheel_msg)

@@ -23,14 +23,14 @@
     <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="robot\agent.py" />
-    <Compile Include="robot\agent_loop.py" />
-    <Compile Include="robot\brain_network.py" />
-    <Compile Include="robot\skills.py" />
-    <Compile Include="robot\virtual_actuator.py" />
-    <Compile Include="robot\virtual_sensor.py" />
+    <Compile Include="agent\core.py" />
+    <Compile Include="agent\agent_loop.py" />
+    <Compile Include="agent\brain_network.py" />
+    <Compile Include="agent\skills.py" />
+    <Compile Include="agent\virtual_actuator.py" />
+    <Compile Include="agent\virtual_sensor.py" />
     <Compile Include="communicator.py" />
-    <Compile Include="robot\__init__.py" />
+    <Compile Include="agent\__init__.py" />
     <Compile Include="simulation\environment.py" />
     <Compile Include="simulation\real_actuator.py" />
     <Compile Include="simulation\arena.py" />
@@ -38,7 +38,7 @@
     <Compile Include="simulation\real_robot.py" />
     <Compile Include="simulation\real_sensor.py" />
     <Compile Include="simulation\simulation_loop.py" />
-    <Compile Include="simulation\stats.py" />
+    <Compile Include="simulation\stats_sim.py" />
     <Compile Include="main.py" />
     <Compile Include="simulation\__init__.py" />
   </ItemGroup>
@@ -65,19 +65,19 @@
   <ItemGroup>
     <Folder Include="models\" />
     <Folder Include="models\urdfs\" />
+    <Folder Include="additional_scripts\" />
     <Folder Include="simulation\" />
-    <Folder Include="robot\" />
+    <Folder Include="agent\" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="models\cube.xacro" />
     <Content Include="models\arena.xacro" />
-    <Content Include="models\arena_GoForward.xacro" />
-    <Content Include="models\arena_OpenDoor.xacro" />
     <Content Include="models\epuck2.xacro" />
     <Content Include="models\urdfs\arena.urdf" />
     <Content Include="models\urdfs\arena_GoForward.urdf" />
     <Content Include="models\urdfs\arena_OpenDoor.urdf" />
     <Content Include="models\urdfs\epuck2.urdf" />
+    <Content Include="agent\stats_agent.py" />
     <Content Include="todos.txt" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />

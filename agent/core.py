@@ -1,5 +1,6 @@
 # parent class for an agent that thinks
 
+from .agent_loop import StatsAgent
 from communicator import Communicator
 from .virtual_actuator import *
 from .virtual_sensor import *
@@ -13,6 +14,7 @@ import random
 class Agent:
     def __init__(self, communicator: Communicator):
         self.bus = communicator
+        self.stats = []
         
 
     def set_communicator(self):
@@ -24,6 +26,8 @@ class Agent:
             for actuator in self.actuators:
                 actuator.set_communicator(self.bus)
 
+    def add_stats(self, stats:list[StatsAgent]):
+        self.stats = stats + self.stats
 
     def run(self):
         raise NotImplementedError("The run() method must be implemented in the subclass.")
@@ -126,7 +130,6 @@ class SkilledAgent(Agent):
                 else: 
                     print("MoveForward succeeded :)")
 
-
 class TheAgent(Agent):
     '''
     it explores the environment and abstracts symbols from used skills. it also accomplish the goal of moving from one pad to another.
@@ -141,39 +144,31 @@ class TheAgent(Agent):
         min_dist = 0.05
         velocity = 10
         self.skillset = {
-            'MoveForward': MoveForward(self.lidars.sensors[0], self.lidars.sensors[7], self.wheels, velocity, min_dist, time=1.0),
-            'TurnAway': TurnAway(self.lidars.sensors[0], self.lidars.sensors[7], self.lidars.sensors[2], self.lidars.sensors[5], self.wheels, velocity, min_dist)}
-            #'OpenDoor': OpenDoor(self.lidars.sensors[0], self.lidars.sensors[7], self.lidars.sensors[2], self.wheels, velocity, min_dist, timeout=7.0)
-            #}
+            'Approach': Approach(self.lidars.sensors[0], self.lidars.sensors[7], self.wheels, velocity, min_dist, timeout=7.0),
+            'TurnAway': TurnAway(self.lidars.sensors[0], self.lidars.sensors[7], self.lidars.sensors[2], self.lidars.sensors[5], self.wheels, velocity, min_dist),
+            'OpenDoor': OpenDoor(self.lidars.sensors[0], self.lidars.sensors[7], self.lidars.sensors[2], self.wheels, velocity, min_dist, timeout=4.0)
+            }
         self.brain = BrainNetwork()
 
     def run(self):
-        for step in range(1000):
-            # A. Observe the environment BEFORE moving
-            prev_state_id, prev_state_vector = self.read_state()
-    
-            # B. Choose a skill to execute (you could randomize this for exploration)
+        try:
+            for step in range(100):
+                # 0. Update statistics
+                for s in self.stats:
+                    s.update()
+                # 1. Read State
+                prev_state_id, prev_state_vector = self.read_state()
+                # 2. Create PDDL -- to be implemented --
 
-            # skill = random.choice(list(self.skillset.values()))
-            duck = self.duck()
-            if duck:
-                skill = self.skillset['TurnAway']
-            else:
-                skill = self.skillset['MoveForward']
-    
-            # C. Execute the skill (this blocks until it finishes or times out)
-            success = skill.execute()
-    
-            # D. Observe the environment AFTER moving
-            current_state_id, current_state_vector = self.read_state()
-    
-            # E. Update the Brain!
-            # This automatically updates the GNG nodes and the NetworkX transitional map.
-            self.brain.update(prev_state_vector, skill, current_state_vector)
-    
-            # Print progress every 10 steps
-            if step % 10 == 0:
-                print(f"Step {step}: Brain has {len(self.brain.gng_nodes)} topological nodes and {len(self.brain.transitional_map.edges)} mapped transitions.")
+                # 3. Make a Plan -- to be implemented --
+                # 4. Execute Next Step -- to be implemented --
+                # 5.A Explore
+                self.explore()
+                # 5.B Read State  -- to be implemented --
+                # 6. Update Network  -- to be implemented --
+        finally:
+            for s in self.stats:
+                s.close()
                 
     def duck(self):
         duck = False
@@ -200,8 +195,27 @@ class TheAgent(Agent):
         return state_id, state_vector
 
     def explore(self):
-        pass
+        while True:
+            # read state
+            prev_state_id, prev_state_vector = self.read_state() 
+            # execute random action
+            skill = random.choice(list(self.skillset.values()))
+            print(f"{skill.__class__.__name__} executed... ") # DEBUG
+            success = skill.execute()   # successfully?
+            print("nicely") if success else print("poorly")
+            if success: break           # YES = go on
+                                        # NO = back to the begining
+        # read new state
+        new_state_id, new_state_vector = self.read_state() 
+        # could we predict it using transitional network?
+        preddicted_state_id = self.brain.predict(prev_state_id, skill)
+        if new_state_id == preddicted_state_id: # are we in correct state?
+            return                              # YES = nothing new to learn
+        else:                                   # NO = we have to add this to our brain
+            self.brain.update(prev_state_vector, skill, new_state_vector)
+            return
 
+        
     def create_pddl(self):
         pass
 

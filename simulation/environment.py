@@ -5,7 +5,7 @@ import pybullet as p
 import pybullet_data
 
 from .object import Object
-from .stats import *
+from .stats_sim import *
 from communicator import Communicator
 
 class Environment():
@@ -13,14 +13,14 @@ class Environment():
         self.objects = None
         self.stats = None
 
-    def __init__(self, objects: list[Object] = [], stats: list[Stats] = []):
+    def __init__(self, objects: list[Object] = [], stats: list[StatsSim] = []):
         self.objects = objects
         self.stats = stats
 
     def add_object(self, obj: Object):
         self.objects.append(obj)
 
-    def add_stats(self, stat: Stats):
+    def add_stats(self, stat: StatsSim):
         self.stats.append(stat)
 
     def setup(self, com: Communicator, time_step: float):

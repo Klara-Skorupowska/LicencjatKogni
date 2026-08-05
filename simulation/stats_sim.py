@@ -3,9 +3,6 @@
 import numpy as np
 import cv2
 
-from .object import Object
-from .real_sensor import CameraSensor
-
 import sys
 from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QGroupBox
 from PyQt5.QtGui import QImage, QPixmap
@@ -15,27 +12,25 @@ import os
 import csv
 from datetime import datetime
 
-class Stats():
+class StatsSim():
     def __init__(self):
         pass
     def update(self):
-        pass
-    def show(self):
         pass
     def close(self):
         pass
 
 
 ### subclasses for collecting and/or displaying 
-
-class StatusBoard(QWidget):
+class StatusBoard(StatsSim, QWidget):
     def __init__(self, name, obj):
         # 1. Initialize the Qt Application if it hasn't been started
         self.app = QApplication.instance()
         if self.app is None:
             self.app = QApplication(sys.argv)
             
-        super().__init__()
+        StatsSim.__init__(self)
+        QWidget.__init__(self)
         self.setWindowTitle(f"{name} Pilot View")
         self.robot = obj
         
@@ -60,7 +55,7 @@ class StatusBoard(QWidget):
         self.hud_group = QGroupBox("Telemetry")
         hud_layout = QVBoxLayout()
         self.text_label = QLabel("Waiting for data...")
-        self.text_label.setWordWrap(True)  # Automatically wraps long lists of sensor data!
+        self.text_label.setWordWrap(True) 
         self.text_label.setStyleSheet("font-family: monospace; font-size: 12pt;")
         hud_layout.addWidget(self.text_label)
         self.hud_group.setLayout(hud_layout)
@@ -88,7 +83,6 @@ class StatusBoard(QWidget):
             if sensor is self.camera:
                 continue
                 
-            # Because of your SensorArray, we just call get_data() directly
             data = sensor.get_data()
             hud_lines.append(self._format_data(name, data))
 
@@ -137,7 +131,7 @@ class StatusBoard(QWidget):
         return f"&nbsp;&nbsp;{name}: {string_data}"
 
 
-class DataLogger:
+class DataLogger(StatsSim):
     """
     Collects sensor and actuator data (excluding cameras) and writes it to a CSV file.
     Creates flattened headers for array-based sensors (e.g., lidars -> lidar_0, lidar_1).

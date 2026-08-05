@@ -260,3 +260,59 @@ class OpenDoor(Skill):
         # Timeout reached
         self.wheels.set_parameters([0.0, 0.0])
         return False # there was a door but we failed to open it in time
+
+
+class Approach(Skill):
+    ''' moves forward until it runs into an obstacle (or out of time) and position itself directly in front of it '''
+    def __init__(self, lidar_front_left: LidarSensor, lidar_front_right: LidarSensor, wheels: WheelsActuator, velocity: float, min_dist: float, timeout: float, epsilon: float = 0.001):
+        '''
+        lidar_front_left - a lidar with angle (0-30) deg
+        lidar_front_right - a lidar with angle (330-360) deg
+        wheels - a set of 2 wheels
+        min_dist - a minimal ditance from the obstacle (in meters)
+        velocity - the speed at which the robot should move
+        timeout - time after which robot stops and the aproach fails
+        epsilon - acceptable distance error
+        '''
+        super().__init__()
+        self.lidar_front_left = lidar_front_left
+        self.lidar_front_right = lidar_front_right
+        self.wheels = wheels
+        self.velocity = velocity
+        self.min_dist = min_dist
+        self.timeout = timeout
+        self.epsilon = epsilon
+
+    def execute(self):
+        # Start moving forward
+        self.wheels.set_parameters([self.velocity, self.velocity])
+        start_time = time.time()
+        
+        while time.time() - start_time < self.timeout:
+            # 1. Take a simultaneous snapshot of all required sensors
+            front_left_dist = self.lidar_front_left.read()
+            front_right_dist = self.lidar_front_right.read()
+            
+            # 2. Evaluate the snapshot
+            if front_left_dist <= self.min_dist or front_left_dist <= self.min_dist:  # if there is an obstacle ahead
+                # - start to position itself in front of it = turn -
+                if front_left_dist >= front_right_dist:
+                    self.wheels.set_parameters([self.velocity/2, -self.velocity/2])
+                else:
+                    self.wheels.set_parameters([-self.velocity/2, self.velocity/2])
+                start_time = time.time() # timeout for positioning
+                while time.time() - start_time < self.timeout:
+                    # snapshot of sensors
+                    front_left_dist = self.lidar_front_left.read()
+                    front_right_dist = self.lidar_front_right.read()
+                    # check if we are facing the wall
+                    if abs(front_right_dist - front_left_dist) < self.epsilon: 
+                        self.wheels.set_parameters([0.0, 0.0])
+                        return True # success: in front of the wall
+                    time.sleep(0.01)
+            # 3. Yield to the CPU
+            time.sleep(0.01)
+            
+        # Timeout reached
+        self.wheels.set_parameters([0.0, 0.0])
+        return False # there was no obstacle that we could reach in time

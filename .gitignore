@@ -6,6 +6,8 @@
 # --- MINE ---
 environment/
 old/
+LicencjatKogni.slnx
+LicencjatKogni.pyproj
 
 # User-specific files
 *.rsuser

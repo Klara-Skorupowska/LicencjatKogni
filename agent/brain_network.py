@@ -19,9 +19,8 @@ class BrainNetwork:
         self.epsilon_b = 0.2
         self.epsilon_n = 0.006
         self.max_age = 50
-        self.lambda_gen = 10
         self.alpha = 0.5  # Error reduction factor
-        self.spawn_threshold = 100   # Only spawn if the worst error is higher than this
+        self.spawn_threshold = 1000   # Only spawn if the worst error is higher than this
         self.beta = 0.995            # Error decay factor per step
         self.step_counter = 0
 
@@ -61,7 +60,6 @@ class BrainNetwork:
         node_ids = list(self.gng_nodes.keys())
         node_matrix = np.array(list(self.gng_nodes.values()))
         
-        # self.weights is now maintained dynamically!
         weighted_diff = (node_matrix - state) * self.weights
         distances = np.linalg.norm(weighted_diff, axis=1)
         
@@ -69,8 +67,9 @@ class BrainNetwork:
         return node_ids[bmu_index]
 
     def update(self, prev_state: np.ndarray, skill_executed: object, current_state: np.ndarray):
-        self.step_counter += 1
-
+        '''
+        Updates both networks. Accessed only when prediction fails (new environment state).
+        '''
         self._update_scaling(prev_state)
         self._update_scaling(current_state)
 
@@ -133,12 +132,12 @@ class BrainNetwork:
             if self.transitional_map.has_node(n):
                 self.transitional_map.remove_node(n)
 
-        # Step G: Insert a new node every lambda_gen steps
-        if self.step_counter % self.lambda_gen == 0 and len(self.gng_nodes) >= 2:
+        # Step G: Evaluate node insertion based on error threshold
+        if len(self.gng_nodes) >= 2:
             # 1. Find node 'q' with maximum error
             q_id = max(self.gng_errors, key=self.gng_errors.get)
             
-            # 2. Check if the network needs new node
+            # 2. Check if the network needs a new node
             if self.gng_errors[q_id] > self.spawn_threshold:
                 # 3. Find neighbor 'f' of 'q' with maximum error
                 q_neighbors = [v for u, v in self.gng_edges.keys() if u == q_id] + \
@@ -184,3 +183,25 @@ class BrainNetwork:
                     skill=skill_executed.__class__.__name__, 
                     weight=1
                 )
+
+    def predict(self, state_id: int, skill: object):
+        '''
+        Predicts the next state ID by checking the transitional map 
+        for an outgoing edge matching the executed skill.
+        '''
+        # Ensure the state actually exists in our graph
+        if not self.transitional_map.has_node(state_id):
+            return None
+            
+        target_skill_name = skill.__class__.__name__
+        
+        # DiGraph.successors(n) returns all nodes with an edge originating from n
+        for potential_next_state in self.transitional_map.successors(state_id):
+            edge_data = self.transitional_map.get_edge_data(state_id, potential_next_state)
+            
+            # If this path was created by the skill we are trying to use
+            if edge_data and edge_data.get('skill') == target_skill_name:
+                return potential_next_state
+                
+        # If no known path matches the skill from the current state
+        return None

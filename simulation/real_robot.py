@@ -12,7 +12,7 @@ class RealRobot(Object):
         super().__init__()  
         self.anchored = False
         self.model_name = "epuck2"
-        self.initial_position = [-0.375, 0.0, 0.05]
+        self.initial_position = [-0.375, -0.375, 0.05]
         self.initial_orientation = [0, 0, 0, 1] 
         self.bus = bus
         self.sensors = {
