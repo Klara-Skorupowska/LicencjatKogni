@@ -1,40 +1,29 @@
-(define (domain robot_abstract)
+(define (domain robot-skills)
   (:requirements :typing)
   (:types state)
   (:predicates
-    (At ?s - state)
     (Pre-TurnAway ?s - state)
     (Eff-TurnAway ?s - state)
-    (Trans-TurnAway ?from - state ?to - state)
     (Pre-Approach ?s - state)
     (Eff-Approach ?s - state)
-    (Trans-Approach ?from - state ?to - state)
-    (Pre-TurnRight ?s - state)
-    (Eff-TurnRight ?s - state)
-    (Trans-TurnRight ?from - state ?to - state)
-    (Pre-TurnLeft ?s - state)
-    (Eff-TurnLeft ?s - state)
-    (Trans-TurnLeft ?from - state ?to - state)
+    (Pre-Turn ?s - state)
+    (Eff-Turn ?s - state)
+    (robot-at ?s - state)
   )
 
-  (:action TurnAway
+  (:action execute-TurnAway
     :parameters (?from - state ?to - state)
-    :precondition (and (At ?from) (Trans-TurnAway ?from ?to) (Pre-TurnAway ?from))
-    :effect (and (not (At ?from)) (At ?to) (Eff-TurnAway ?to))
+    :precondition (and (robot-at ?from) (Pre-TurnAway ?to))
+    :effect (and (not (robot-at ?from)) (robot-at ?to) (Eff-TurnAway ?to))
   )
-  (:action Approach
+  (:action execute-Approach
     :parameters (?from - state ?to - state)
-    :precondition (and (At ?from) (Trans-Approach ?from ?to) (Pre-Approach ?from))
-    :effect (and (not (At ?from)) (At ?to) (Eff-Approach ?to))
+    :precondition (and (robot-at ?from) (Pre-Approach ?to))
+    :effect (and (not (robot-at ?from)) (robot-at ?to) (Eff-Approach ?to))
   )
-  (:action TurnRight
+  (:action execute-Turn
     :parameters (?from - state ?to - state)
-    :precondition (and (At ?from) (Trans-TurnRight ?from ?to) (Pre-TurnRight ?from))
-    :effect (and (not (At ?from)) (At ?to) (Eff-TurnRight ?to))
-  )
-  (:action TurnLeft
-    :parameters (?from - state ?to - state)
-    :precondition (and (At ?from) (Trans-TurnLeft ?from ?to) (Pre-TurnLeft ?from))
-    :effect (and (not (At ?from)) (At ?to) (Eff-TurnLeft ?to))
+    :precondition (and (robot-at ?from) (Pre-Turn ?to))
+    :effect (and (not (robot-at ?from)) (robot-at ?to) (Eff-Turn ?to))
   )
 )

@@ -42,6 +42,7 @@ class MoveForward(Skill):
         self.time = time
 
     def execute(self):
+        print("[Agent] Executing MoveForward skill")
         self.wheels.set_parameters([self.velocity, self.velocity])
         start_time = time.time()
         
@@ -61,42 +62,13 @@ class MoveForward(Skill):
         # If we reach this point, the timeout expired before finding a wall = no need for halting, as we are still moving forward
         return True  # completed moving forward without hitting a wall
 
-class TurnLeft(Skill):
-    '''
-    left turn for set time
-    '''
-    def __init__(self, lidar_forward_left: LidarSensor, lidar_forward_right: LidarSensor, wheels: WheelsActuator, velocity: float, min_dist: float, time: float = 1.0):
-        '''
-        lidar_forward_left - a lidar with angle (0-30) deg
-        lidar_forward_right - a lidar with angle (330-360) deg
-        wheels - a set of 2 wheels
-        min_dist - a minimal ditance from the obstacle (in meters)
-        velocity 
-        '''
-        super().__init__()
-        self.lidar_fl = lidar_forward_left
-        self.lidar_fr = lidar_forward_right
-        self.wheels = wheels
-
-        self.velocity = velocity
-        self.min_dist = min_dist
-        self.time = time
-
-    def execute(self):
-        start_time = time.time()
-        while time.time() - start_time < self.time:
-            self.wheels.set_parameters([-self.velocity, self.velocity])
-            time.sleep(0.01)  # Prevent CPU spinning
-
-        self.wheels.set_parameters([0.0, 0.0]) # halt
-        return True
-
-class TurnRight(Skill):
+class Turn(Skill):
     '''
     right turn for set time
     '''
-    def __init__(self, lidar_forward_left: LidarSensor, lidar_forward_right: LidarSensor, wheels: WheelsActuator, velocity: float, min_dist: float, time: float = 1.0):
+    def __init__(self, direction: str, wheels: WheelsActuator, velocity: float, time: float = 1.0):
         '''
+        direction - direction of turning: 'right' or 'left'
         lidar_forward_left - a lidar with angle (0-30) deg
         lidar_forward_right - a lidar with angle (330-360) deg
         wheels - a set of 2 wheels
@@ -104,18 +76,26 @@ class TurnRight(Skill):
         velocity 
         '''
         super().__init__()
-        self.lidar_fl = lidar_forward_left
-        self.lidar_fr = lidar_forward_right
+        self.direction = direction
         self.wheels = wheels
 
         self.velocity = velocity
-        self.min_dist = min_dist
         self.time = time
 
     def execute(self):
+        print(f"[Agent] Executing Turn skill. Direction {self.direction}")
+        left = 1
+        right = 1
+        if self.direction == 'right':
+            right = -1
+        elif self.direction == 'left':
+            left = -1
+        else:
+            return False # todo raise
+
+        self.wheels.set_parameters([left*self.velocity, right*self.velocity])
         start_time = time.time()
         while time.time() - start_time < self.time:
-            self.wheels.set_parameters([self.velocity, -self.velocity])
             time.sleep(0.01)  # Prevent CPU spinning
 
         self.wheels.set_parameters([0.0, 0.0]) # halt
@@ -146,6 +126,7 @@ class TurnAway(Skill):
         self.min_dist = min_dist
 
     def execute(self):
+        print("[Agent] Executing TurnAway skill.")
         # 1. Find nearest obstacle
         front_left= self.lidar_front_left.read()
         front_right = self.lidar_front_right.read()
@@ -230,6 +211,7 @@ class OpenDoor(Skill):
         self.timeout = timeout
 
     def execute(self):
+        print("[Agent] Executing OpenDoor skill")
         # Start moving forward
         self.wheels.set_parameters([self.velocity, self.velocity])
         
@@ -284,6 +266,7 @@ class Approach(Skill):
         self.epsilon = epsilon
 
     def execute(self):
+        print("[Agent] Executing Approach skill")
         # Start moving forward
         self.wheels.set_parameters([self.velocity, self.velocity])
         start_time = time.time()

@@ -1,22 +1,31 @@
 # ------- Rzeczy do zrobienia ------- #
 ---------------------------------------
 ---Legenda-----------------------------
-[]	- do zrobienia
+[]  - do zrobienia
 [x] - nie zrobione, plan się zmienił --> na co się plan zmienił
 [o] - zrobione
 [!] - nie zrobione, a powinno
 [^] - zrobione, ale nie do końca dobrze, należy poprawić
-() - zrobione, a nie było planowane
+()  - zrobione, a nie było planowane
 ---------------------------------------
 ---------------------------------------
+### 06.08.2025 ###
+[] nowe skille: jednoznaczna kolejność wykonywania
+[] klasa boga wszechwiedzącego do sprawdzania w oparciu o bezwzględną pozycję czy skill się udał i czy jest u celu
+[] i wtedy wyjdzie abstrahowanie per skill
 ### 05.08.2026 ###
 [] poprawić zapisywanie logów: folder z czasem startu symulacji, czas trwania do znalezienia celu, ile razy wszedł w explore
 [] poprawić zapisywanie pddl: timestamp żeby nie tracić po każdym rerun
 [] program do używania gotowego, tj. re-run z włączonym odczytem tego co już było = pierwszy plan jakiś jest = w idealnym świecie od razu działa, a po zmianie areny po czasie krótszym niż szukanie na oślep
-[] wizualizacje: symbole, sieci
+[] wizualizacje: symbole (kolory 3x3, linie, dystanse), sieci (nodes, edges, errors), 
 [] poprawić skill otwierania drzwi bo nie działa -- dodać akcelerometr?
 [] co zrobić aby gdy nie ma celu tworzył działające ścieżki? dokąd powinien iść? na skraj tego co zna. Jak to określić? GNG?
 [] zapisywanie planu zakończonego sukcesem
+[] zapisywać jaki jest błąd na GNG żeby móc dopasować treshold
+[o] dodać tagi do każdego printa np. [Planner]
+[] oduczyć go chodzić po ścianach (chyba najbardziej approach) - poprawić skille :(
+[o] wychodzi z pętli bez przechodzenia przez plan (nie powinien, nawet jeśli to sukces)
+[] Przyjrzeć się tworzeniu symboli, rozróżnić turn 'left'/'right', posługiwać się nazwami ze skillsetu
 
 ### 04.08.2026 ###
 [o] dodać statystyki sieci

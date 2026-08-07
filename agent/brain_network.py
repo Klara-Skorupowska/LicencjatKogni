@@ -20,8 +20,8 @@ class BrainNetwork:
         self.epsilon_n = 0.006
         self.max_age = 50
         self.alpha = 0.5  # Error reduction factor
-        self.spawn_threshold = 100   # Only spawn if the worst error is higher than this
-        self.beta = 0.995            # Error decay factor per step
+        self.spawn_threshold = 1   # Only spawn if the worst error is higher than this
+        self.beta = 0.99            # Error decay factor per step
         self.step_counter = 0
 
         self.transitional_map = nx.DiGraph()
@@ -70,6 +70,7 @@ class BrainNetwork:
         '''
         Updates both networks. Accessed only when prediction fails (new environment state).
         '''
+        print("[Brain] Updating networks...")
         self._update_scaling(prev_state)
         self._update_scaling(current_state)
 
@@ -245,7 +246,7 @@ class BrainNetwork:
                     'max': src_max,
                     'raw_nodes': list(set(raw_sources)),
                     'skill': skill,
-                    'target': target_node
+                    'node': target_node
                 }
                 
         # 3. Extract mathematical bounds for Effects
@@ -263,7 +264,7 @@ class BrainNetwork:
                     'max': tgt_max,
                     'raw_nodes': list(set(raw_targets)),
                     'skill': skill,
-                    'origin': source_node
+                    'node': source_node
                 }
                 
         return symbolic_bounds

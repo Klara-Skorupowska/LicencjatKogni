@@ -12,7 +12,7 @@ def simulation_loop(bus: Communicator, setup_complete_event, robot: RealRobot, a
     """Runs continuously at 240Hz, completely independent of the agent."""
     print("[Physics] Starting world clock...")
     print("Loading environment...")
-    stats_sim = [StatusBoard("Robot_1", robot), DataLogger(robot, log_dir="./logs")]
+    stats_sim = [StatusBoard("Robot_1", robot), DataLogger(robot)]
     world = Environment([robot, arena] + objects, stats_sim)
     time_step = 1.0 / 240.0
     world.setup(bus, time_step)

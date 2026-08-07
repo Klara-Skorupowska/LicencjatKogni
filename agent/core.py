@@ -10,10 +10,9 @@ from .brain_network import *
 import cv2
 import numpy as np
 import random
-from collections import defaultdict
 import os
-import json
-import requests
+import subprocess
+import sys
 
 class Agent:
     def __init__(self, communicator: Communicator):
@@ -88,8 +87,8 @@ class SkilledAgent(Agent):
         velocity = 10
         self.skillset = {
             'MoveForward': MoveForward(self.lidars.sensors[0], self.lidars.sensors[7], self.wheels, velocity, min_dist, time=1.0),
-            'TurnRight': TurnRight(self.lidars.sensors[0], self.lidars.sensors[7], self.wheels, velocity, min_dist, time=1.0),
-            'TurnLeft': TurnLeft(self.lidars.sensors[0], self.lidars.sensors[7], self.wheels, velocity, min_dist),
+            'TurnRight': Turn('right', self.wheels, velocity, time=1.0),
+            'TurnLeft': Turn('left', self.wheels, velocity, time=1.0),
             'TurnAway': TurnAway(self.lidars.sensors[0], self.lidars.sensors[7], self.lidars.sensors[2], self.lidars.sensors[5], self.wheels, velocity, min_dist),
             'OpenDoor': OpenDoor(self.lidars.sensors[0], self.lidars.sensors[7], self.lidars.sensors[2], self.wheels, velocity, min_dist, timeout=7.0)
             }
@@ -151,8 +150,8 @@ class TheAgent(Agent):
         self.skillset = {
             'Approach': Approach(self.lidars.sensors[0], self.lidars.sensors[7], self.wheels, velocity, min_dist, timeout=10.0),
             'TurnAway': TurnAway(self.lidars.sensors[0], self.lidars.sensors[7], self.lidars.sensors[2], self.lidars.sensors[5], self.wheels, velocity, min_dist),
-            'TurnLeft': TurnLeft(self.lidars.sensors[0], self.lidars.sensors[7], self.wheels, velocity, min_dist, 1.0),
-            'TurnRight': TurnRight(self.lidars.sensors[0], self.lidars.sensors[7], self.wheels, velocity, min_dist, 1.0),
+            'TurnLeft': Turn('left', self.wheels, velocity, 1.0),
+            'TurnRight': Turn('right', self.wheels, velocity, 1.0),
             'OpenDoor': OpenDoor(self.lidars.sensors[0], self.lidars.sensors[7], self.lidars.sensors[2], self.wheels, velocity, min_dist, timeout=10.0)
             }
         # add a brain
@@ -162,11 +161,13 @@ class TheAgent(Agent):
         # PDDL files
         self.domain_path = "pddl/domain.pddl"
         self.problem_path = "pddl/problem.pddl"
+        self.plan_file = "pddl/problem.pddl.soln"
 
     def run(self):
         try:
-            for step in range(200):
-
+            n = 200
+            for step in range(n):
+                print(f"[Agent] Step {step}/{n}")
                 # 0. Update statistics
                 for s in self.stats:
                     s.update()
@@ -188,7 +189,7 @@ class TheAgent(Agent):
                         
                 if goal_node_id is None:
                     # If goal is not yet known, fallback to exploration
-                    print("Goal not discovered yet. Continuing exploration...")
+                    print("[Agent] Goal not discovered yet. Continuing exploration...")
                     self.explore()
                     continue
 
@@ -253,7 +254,7 @@ class TheAgent(Agent):
                             break # Break to Create PDDL loop
                         else:
                             # yes -> Finnish
-                            print("Successfully reached goal!")
+                            print("[Agent] Successful plan noted.!")
                             with open("pddl/successful_plan.txt", "w") as f:
                                 f.write("Successful Plan Executed:\n")
                                 for p_step, (p_skill, p_target) in enumerate(plan, 1):
@@ -264,11 +265,12 @@ class TheAgent(Agent):
                         break # Break out to Main Loop -> Read State
                     if needs_replan:
                         continue # Loop back to -> Create PDDL
+            print("[Agent] The End")
                 
         finally:
             self.finnished.read()
             if self.finnished.value:
-                print("Successfully reached goal")
+                print("[Agent] Successfully reached goal")
             for s in self.stats:
                 s.close()
                 
@@ -298,6 +300,7 @@ class TheAgent(Agent):
         '''
         execute random action, update nets if it brings new info
         '''
+        print("[Agent] Exploring...")
         while True:
             # read state
             prev_state_id, prev_state_vector = self.read_state()
@@ -340,20 +343,19 @@ class TheAgent(Agent):
         # A state in this context is simply the destination node ID from the GNG
         skills = set()
         states = set([start_node_id, goal_node_id]) 
-
-        for symbol_name, data in symbolic_bounds.items():
-            # symbol_name looks like: "Pre_MoveForward_to_5" or "Eff_TurnRight_from_2"
-            parts = symbol_name.split('_')
-            skill = parts[1]
-            node = int(parts[3])
+        for category in ['preconditions', 'effects']:
+            for symbol_name, data in symbolic_bounds[category].items():
+                # symbol_name looks like: "Pre_MoveForward_to_5" or "Eff_TurnRight_from_2"
+                skill = data['skill']
+                node = data['node']
         
-            skills.add(skill)
-            states.add(node)
+                skills.add(skill)
+                states.add(node)
 
-            # Write the continuous bounding boxes for the robot's physical execution
-            with open(f".pddl/{symbol_name}.txt", "w") as f:
-                f.write(f"MIN: {data['min_bound'].tolist()}\n")
-                f.write(f"MAX: {data['max_bound'].tolist()}\n")
+                # Write the continuous bounding boxes for the robot's physical execution
+                with open(f"pddl/{symbol_name}.txt", "w") as f:
+                    f.write(f"MIN: {data['min'].tolist()}\n")
+                    f.write(f"MAX: {data['max'].tolist()}\n")
 
         # 3. Generate domain.pddl
         domain_str = "(define (domain robot-skills)\n"
@@ -390,16 +392,17 @@ class TheAgent(Agent):
 
         # Map the existing topological edges to the symbolic preconditions
         # This implicitly respects the continuous node clusters without complex overlapping logic
-        for symbol_name in symbolic_bounds.keys():
-            parts = symbol_name.split('_')
-            prefix = parts[0]
-            skill = parts[1]
-            node = int(parts[3])
+        for category in ['preconditions', 'effects']:
+            for symbol_name in symbolic_bounds[category].keys():
+                parts = symbol_name.split('_')
+                prefix = parts[0]
+                skill = data['skill']
+                node = data['node']
         
-            if prefix == "Pre":
-                problem_str += f"    (Pre-{skill} s{node})\n"
-            elif prefix == "Eff":
-                problem_str += f"    (Eff-{skill} s{node})\n"
+                if prefix == "Pre":
+                    problem_str += f"    (Pre-{skill} s{node})\n"
+                elif prefix == "Eff":
+                    problem_str += f"    (Eff-{skill} s{node})\n"
             
         problem_str += "  )\n"
         problem_str += "  (:goal\n"
@@ -409,80 +412,75 @@ class TheAgent(Agent):
         with open(self.problem_path, "w") as f:
             f.write(problem_str)
         
-        print(f"Generated on-demand PDDL for {len(states)} abstract states.")
+        print(f"[Agent] Generated on-demand PDDL for {len(states)} abstract states.")
 
     def make_plan(self):
+        ''' 
+        Reads the generated PDDL files, calls a local pyperplan solver, 
+        and translates the output into a list of executable skill tuples.
         '''
-        Reads the generated PDDL files, calls a solver, and translates the output 
-        into a list of (skill_name, target_state_id) tuples.
-        '''
-        # 1. Check if files exist
+
+        # Fast-Failing: Ensure the files exist before wasting compute
         if not os.path.exists(self.domain_path) or not os.path.exists(self.problem_path):
-            print("PDDL files are missing. Run create_pddl() first.")
+            print("[Planner] Missing PDDL files. Cannot generate a plan.")
             return []
 
-        with open(self.domain_path, "r") as f:
-            domain_text = f.read()
-        with open(self.problem_path, "r") as f:
-            problem_text = f.read()
+        # Clean up any old solution file so we don't accidentally read stale data
+        if os.path.exists(self.plan_file):
+            os.remove(self.plan_file)
 
-        # 2. Fast-fail if the goal wasn't found during exploration
-        # (Assuming we tagged the unknown goal as 's_unknown_goal' in the previous step)
-        if "s_unknown_goal" in problem_text:
-            print("The end pad was not discovered during exploration. No plan can be made.")
-            return []
-
-        # 3. Request a plan from the online PDDL solver API
-        print("Sending PDDL to solver API...")
-        data = {
-            'domain': domain_text,
-            'problem': problem_text
-        }
-        
+        # 1. Execute the local Pyperplan solver
         try:
-            response = requests.post('http://solver.planning.domains/solve', json=data)
-            response.raise_for_status() # Raise an exception for bad HTTP status codes
-            response_json = response.json()
-        except requests.exceptions.RequestException as e:
-            print(f"Network error while contacting the solver API: {e}")
+            print("[Planner] Querying local Pyperplan solver...")
+            # subprocess.run blocks the thread safely until the solver finishes
+            subprocess.run(
+                [sys.executable, "-m", "pyperplan", self.domain_path, self.problem_path],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+        except subprocess.CalledProcessError:
+            # Pyperplan returns a non-zero exit code if no path to the goal exists
+            print("[Planner] Solver failed to find a valid path to the goal.")
             return []
-        except ValueError:
-            print("Received invalid JSON from the solver API.")
+        except FileNotFoundError:
+            print("[Planner] Pyperplan not found. Did you run 'pip install pyperplan'?")
             return []
 
-        # 4. Check if the solver successfully found a valid plan
-        if response_json.get('status') != 'ok' or not response_json.get('result', {}).get('plan'):
-            print("The solver evaluated the problem but could not find a valid plan.")
+        # 2. Check if the planner successfully created the solution file
+        if not os.path.exists(self.plan_file):
+            print("[Planner] Goal is unreachable. Returning empty plan.")
             return []
 
-        # 5. Translate PDDL text output back into Python tuples
-        plan_steps = response_json['result']['plan']
+        # 3. Parse the output and map back to executable skills
         executable_plan = []
-        
-        for step in plan_steps:
-            # PDDL actions come back in lowercase, e.g., "(moveforward s0 s1)"
-            # We strip the parentheses and split by spaces
-            parts = step['name'].strip('()').split()
-        
-            action_name = parts[0]
-            # The parameters are (?from ?to), so target_state is the 3rd element
-            target_state = parts[2] 
-            
-            # Find the exact case-sensitive key in self.skillset 
-            matched_key = None
-            for skill_key in self.skillset.keys():
-                if skill_key.lower() == action_name.lower():
-                    matched_key = skill_key
-                    break
-            
-            if matched_key:
-                # Append as a tuple so the execution loop can unpack it
-                executable_plan.append((matched_key, target_state))
-            else:
-                print(f"Warning: The solver returned an action '{action_name}' that is not in the skillset!")
+    
+        with open(self.plan_file, "r") as f:
+            for line in f:
+                line = line.strip()
+                # Skip empty lines or Pyperplan comments
+                if not line or line.startswith(";"): 
+                    continue 
 
-        print(f"Success! Plan generated with {len(executable_plan)} steps.")
+                # Pyperplan formats steps as "(moveforward s0 s1)"
+                parts = line.strip("()").split()
+                if len(parts) < 3:
+                    continue
+            
+                action_name_lower = parts[0]
+                target_state = parts[2]
+
+                # Case-Insensitive Mapping: Match the lowercased PDDL symbol 
+                # back to your PascalCase skillset keys
+                matched_skill = None
+                for skill_name in self.skillset.keys():
+                    if skill_name.lower() == action_name_lower:
+                        matched_skill = skill_name
+                        break
+
+                if matched_skill:
+                    # Return the tuple format required for your precondition checks
+                    executable_plan.append((matched_skill, target_state))
+
+        print(f"[Planner] Local plan found: {executable_plan}")
         return executable_plan
-
-    def execute_plan(self):
-        pass

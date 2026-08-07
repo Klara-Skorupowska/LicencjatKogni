@@ -33,7 +33,7 @@ class FinnishSensor(VirtualSensor):
 
     def read(self):
         self.value = self.bus.call_service(f"/sensor/finnish/sense")
-        if self.value== True: print("Goal achived")
+        if self.value== True: print("[Sensors] Goal achived")
         return self.value
 
 

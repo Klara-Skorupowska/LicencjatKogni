@@ -136,17 +136,18 @@ class DataLogger(StatsSim):
     Collects sensor and actuator data (excluding cameras) and writes it to a CSV file.
     Creates flattened headers for array-based sensors (e.g., lidars -> lidar_0, lidar_1).
     """
-    def __init__(self, obj, log_dir="."):
+    def __init__(self, obj, log_dir="telemetry"):
         self.robot = obj
         self.sensors = getattr(obj, 'sensors', {})
         self.actuators = getattr(obj, 'actuators', {})
+
+        start_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+        log_dir = f"logs/{start_time}/{log_dir}"
         
         # Ensure the log directory exists
         os.makedirs(log_dir, exist_ok=True)
-        
-        # Generate a timestamped filename
-        start_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.filepath = os.path.join(log_dir, f"telemetry_{start_time}.csv")
+        name = self.robot.model_name
+        self.filepath = os.path.join(log_dir, f"telemetry_{name}.csv")
         
         # Initialize headers
         self.headers = ["timestamp"]
