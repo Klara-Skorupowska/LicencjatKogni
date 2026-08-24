@@ -3,7 +3,7 @@ import networkx as nx
 import os
 import time
 
-def run_viewer(file_path="logs/brain_network_final.graphml", refresh_rate=0.5):
+def run_viewer(file_path="logs/20260824_1109/brain_network/transgraph_final.graphml", refresh_rate=0.5):
     print("Starting Live Brain Viewer...")
     plt.ion()
     fig, ax = plt.subplots(figsize=(10, 8))

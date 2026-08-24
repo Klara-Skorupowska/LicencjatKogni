@@ -165,7 +165,7 @@ class TheAgent(Agent):
 
     def run(self):
         try:
-            n = 200
+            n = 50
             for step in range(n):
                 print(f"[Agent] Step {step}/{n}")
                 # 0. Update statistics

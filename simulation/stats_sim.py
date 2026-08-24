@@ -141,7 +141,7 @@ class DataLogger(StatsSim):
         self.sensors = getattr(obj, 'sensors', {})
         self.actuators = getattr(obj, 'actuators', {})
 
-        start_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+        start_time = datetime.now().strftime("%Y%m%d_%H%M")
         log_dir = f"logs/{start_time}/{log_dir}"
         
         # Ensure the log directory exists

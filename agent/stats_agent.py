@@ -9,6 +9,7 @@ class StatsAgent():
 
 import networkx as nx
 from datetime import datetime
+import os
 
 class NetworkLogger(StatsAgent):
     """
@@ -17,8 +18,9 @@ class NetworkLogger(StatsAgent):
     def __init__(self, agent, save_dir="brain_network", update_frequency=10):
         super().__init__()
         self.brain = agent.brain
-        start_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+        start_time = datetime.now().strftime("%Y%m%d_%H%M")
         self.save_path = f"logs/{start_time}/{save_dir}"
+        os.makedirs(self.save_path, exist_ok=True)
         self.live_path = f"{self.save_path}/transgraph_live.graphml"
         self.update_frequency = update_frequency
         self.step_counter = 0

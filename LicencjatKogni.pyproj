@@ -65,6 +65,14 @@
   </ItemGroup>
   <ItemGroup>
     <Folder Include="logs\" />
+    <Folder Include="logs\20260806_113423\" />
+    <Folder Include="logs\20260806_113423\telemetry\" />
+    <Folder Include="logs\20260806_113529\" />
+    <Folder Include="logs\20260806_113529\telemetry\" />
+    <Folder Include="logs\20260806_120009\" />
+    <Folder Include="logs\20260806_120009\telemetry\" />
+    <Folder Include="logs\20260824_104610\" />
+    <Folder Include="logs\20260824_104610\telemetry\" />
     <Folder Include="models\" />
     <Folder Include="models\urdfs\" />
     <Folder Include="additional_scripts\" />
@@ -73,40 +81,12 @@
     <Folder Include="agent\" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include="logs\20260806_113423\telemetry\telemetry_epuck2.csv" />
+    <Content Include="logs\20260806_113529\telemetry\telemetry_epuck2.csv" />
+    <Content Include="logs\20260806_120009\telemetry\telemetry_epuck2.csv" />
+    <Content Include="logs\20260824_104610\telemetry\telemetry_epuck2.csv" />
     <Content Include="logs\brain_network_final.graphml" />
     <Content Include="logs\brain_network_live.graphml" />
-    <Content Include="logs\telemetry_20260805_122536.csv" />
-    <Content Include="logs\telemetry_20260805_125557.csv" />
-    <Content Include="logs\telemetry_20260805_155438.csv" />
-    <Content Include="logs\telemetry_20260805_155508.csv" />
-    <Content Include="logs\telemetry_20260805_161036.csv" />
-    <Content Include="logs\telemetry_20260805_161124.csv" />
-    <Content Include="logs\telemetry_20260805_161159.csv" />
-    <Content Include="logs\telemetry_20260805_161308.csv" />
-    <Content Include="logs\telemetry_20260805_161439.csv" />
-    <Content Include="logs\telemetry_20260805_161647.csv" />
-    <Content Include="logs\telemetry_20260805_161956.csv" />
-    <Content Include="logs\telemetry_20260805_172818.csv" />
-    <Content Include="logs\telemetry_20260805_172856.csv" />
-    <Content Include="logs\telemetry_20260805_173415.csv" />
-    <Content Include="logs\telemetry_20260805_173441.csv" />
-    <Content Include="logs\telemetry_20260805_173453.csv" />
-    <Content Include="logs\telemetry_20260805_173857.csv" />
-    <Content Include="logs\telemetry_20260805_173915.csv" />
-    <Content Include="logs\telemetry_20260805_173949.csv" />
-    <Content Include="logs\telemetry_20260805_174021.csv" />
-    <Content Include="logs\telemetry_20260805_174128.csv" />
-    <Content Include="logs\telemetry_20260805_175120.csv" />
-    <Content Include="logs\telemetry_20260805_175159.csv" />
-    <Content Include="logs\telemetry_20260805_175426.csv" />
-    <Content Include="logs\telemetry_20260805_180543.csv" />
-    <Content Include="logs\telemetry_20260805_204117.csv" />
-    <Content Include="logs\telemetry_20260805_204205.csv" />
-    <Content Include="logs\telemetry_20260805_210944.csv" />
-    <Content Include="logs\telemetry_20260805_214052.csv" />
-    <Content Include="logs\telemetry_20260805_215129.csv" />
-    <Content Include="logs\telemetry_20260805_223222.csv" />
-    <Content Include="logs\telemetry_20260805_223555.csv" />
     <Content Include="models\cube.xacro" />
     <Content Include="models\arena.xacro" />
     <Content Include="models\epuck2.xacro" />
