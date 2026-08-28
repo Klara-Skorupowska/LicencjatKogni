@@ -51,7 +51,7 @@ class FinnishSensor(RealSensor):
         self.end_pad_coords = None
         self.robot_id = None
         self.value = None
-        self.epsilon = 0.1 # how close they have to be = 10 cm is enough
+        self.epsilon = 0.2 # how close they have to be 
 
         self.bus.register_service(f"/sensor/finnish/sense", self.sense)
 

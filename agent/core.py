@@ -1,10 +1,13 @@
 # parent class for an agent that thinks
 
+from agent.skills_serial import GoThroughTheDoor
+
 from .agent_loop import StatsAgent
 from communicator import Communicator
 from .virtual_actuator import *
 from .virtual_sensor import *
 from .skills import *
+from .skills_serial import *
 from .brain_network import *
 
 import cv2
@@ -133,9 +136,16 @@ class SkilledAgent(Agent):
                 else: 
                     print("MoveForward succeeded :)")
 
+import os
+import sys
+import subprocess
+import random
+import numpy as np
+
 class TheAgent(Agent):
     '''
-    it explores the environment and abstracts symbols from used skills. it also accomplish the goal of moving from one pad to another.
+    It explores the environment and abstracts symbols from used skills. 
+    It also accomplishes the goal of moving from one pad to another.
     '''
     def __init__(self, bus: Communicator):
         super().__init__(bus)
@@ -143,21 +153,22 @@ class TheAgent(Agent):
         self.wheels = WheelsActuator(self.bus)
         self.lidars = VirtualSensorArray(self.bus, [LidarSensor(self.bus, ang) for ang in [17, 50, 90, 150, 210, 270, 310, 343]])
         self.camera = CameraSensor(self.bus)
+        
         # Prepare the skill set
-            # common parameters:
         min_dist = 0.05
-        velocity = 10
+        velocity = 15
         self.skillset = {
-            'Approach': Approach(self.lidars.sensors[0], self.lidars.sensors[7], self.wheels, velocity, min_dist, timeout=10.0),
-            'TurnAway': TurnAway(self.lidars.sensors[0], self.lidars.sensors[7], self.lidars.sensors[2], self.lidars.sensors[5], self.wheels, velocity, min_dist),
-            'TurnLeft': Turn('left', self.wheels, velocity, 1.0),
-            'TurnRight': Turn('right', self.wheels, velocity, 1.0),
-            'OpenDoor': OpenDoor(self.lidars.sensors[0], self.lidars.sensors[7], self.lidars.sensors[2], self.wheels, velocity, min_dist, timeout=10.0)
-            }
-        # add a brain
+            'SpotTheDoor': SpotTheColor(60, self.camera, self.lidars, self.wheels, velocity, min_dist, timeout=10.0),
+            'GoToTheDoor': GoToTheDoor(self.camera, self.lidars, self.wheels, velocity, min_dist=min_dist, timeout=20.0),
+            'GoThroughTheDoor': GoThroughTheDoor(self.camera, self.lidars, self.wheels, velocity, min_dist, timeout=15.0),
+            'SpotTheGoal': SpotTheColor(120, self.camera, self.lidars, self.wheels, velocity, min_dist, timeout=10.0),
+            'GoToTheGoal': GoToTheGoal(self.camera, self.lidars, self.wheels, velocity, min_dist=min_dist, timeout=20.0),
+        }
+        
+        # Add a brain
         self.brain = BrainNetwork()
-        # are we done?
         self.finnished = FinnishSensor(bus)
+        
         # PDDL files
         self.domain_path = "pddl/domain.pddl"
         self.problem_path = "pddl/problem.pddl"
@@ -175,7 +186,7 @@ class TheAgent(Agent):
                 # 1. Read State
                 prev_state_id, prev_state_vector = self.read_state()
 
-                # check for goal (maybe we are already there)
+                # Check for goal (maybe we are already there)
                 self.finnished.read()
                 if self.finnished.value:
                     self.brain.transitional_map.nodes[prev_state_id]['is_goal'] = True
@@ -290,7 +301,6 @@ class TheAgent(Agent):
         # 2. preprocess camera data
         self.camera.preprocess()
         # 3. classify state using brain network
-        # Combine standard Python lists, then make it a NumPy array
         state_vector = np.array(self.lidars.value + self.camera.coded, dtype=float)
         self.brain._update_scaling(state_vector)
         state_id = self.brain.classify(state_vector)
@@ -298,7 +308,7 @@ class TheAgent(Agent):
 
     def explore(self):
         '''
-        execute random action, update nets if it brings new info
+        Execute random action, update nets if it brings new info
         '''
         print("[Agent] Exploring...")
         while True:
@@ -326,33 +336,30 @@ class TheAgent(Agent):
             self.brain.update(prev_state_vector, skill, new_state_vector)
             return
         
-    
     def create_pddl(self, start_node_id: int, goal_node_id: int):
         '''
         Uses on-demand aggregation of the continuous GNG to create PDDL files 
-        with a plan to reach the end pad.
+        with abstract logic purely grouped by skills.
         '''
-        # Ensure target directory exists as requested
         os.makedirs('pddl', exist_ok=True) 
 
-        # 1. On-Demand Aggregation: Snapshot the current state of the GNG
-        # This returns the dict with 'min_bound', 'max_bound', and 'raw_nodes'
+        # 1. Snapshot the current state of the GNG purely by skill bounds
         symbolic_bounds = self.brain.get_symbolic_representation()
 
-        # 2. Extract unique skills and abstract states to build the PDDL strings
-        # A state in this context is simply the destination node ID from the GNG
+        # 2. Aggregate required states and write bounding box bounds
         skills = set()
         states = set([start_node_id, goal_node_id]) 
+        
         for category in ['preconditions', 'effects']:
             for symbol_name, data in symbolic_bounds[category].items():
-                # symbol_name looks like: "Pre_MoveForward_to_5" or "Eff_TurnRight_from_2"
                 skill = data['skill']
-                node = data['node']
-        
                 skills.add(skill)
-                states.add(node)
+                
+                # Expand states list with every node that fits into this skill's bounding box
+                for node in data['raw_nodes']:
+                    states.add(node)
 
-                # Write the continuous bounding boxes for the robot's physical execution
+                # Write continuous boundaries for physical checks later
                 with open(f"pddl/{symbol_name}.txt", "w") as f:
                     f.write(f"MIN: {data['min'].tolist()}\n")
                     f.write(f"MAX: {data['max'].tolist()}\n")
@@ -365,16 +372,17 @@ class TheAgent(Agent):
     
         # Define explicit Precondition and Effect predicates for every known skill
         for skill in skills:
-            domain_str += f"    (Pre-{skill} ?s - state)\n"
-            domain_str += f"    (Eff-{skill} ?s - state)\n"
+            domain_str += f"    (pre_{skill} ?s - state)\n"
+            domain_str += f"    (eff_{skill} ?s - state)\n"
         domain_str += "    (robot-at ?s - state)\n  )\n\n"
 
-        # Define the actions logically requiring the Pre- and causing the Eff- symbols
+        # Actions are generated dynamically per skill
         for skill in skills:
-            domain_str += f"  (:action execute-{skill}\n"
+            domain_str += f"  (:action {skill}\n"
             domain_str += f"    :parameters (?from - state ?to - state)\n"
-            domain_str += f"    :precondition (and (robot-at ?from) (Pre-{skill} ?to))\n"
-            domain_str += f"    :effect (and (not (robot-at ?from)) (robot-at ?to) (Eff-{skill} ?to))\n"
+            # Note: ?from needs to meet preconditions, ?to is where the effects happen
+            domain_str += f"    :precondition (and (robot-at ?from) (pre_{skill} ?from))\n"
+            domain_str += f"    :effect (and (not (robot-at ?from)) (robot-at ?to) (eff_{skill} ?to))\n"
             domain_str += "  )\n"
         domain_str += ")"
 
@@ -390,19 +398,15 @@ class TheAgent(Agent):
         problem_str += "  (:init\n"
         problem_str += f"    (robot-at s{start_node_id})\n"
 
-        # Map the existing topological edges to the symbolic preconditions
-        # This implicitly respects the continuous node clusters without complex overlapping logic
+        # Apply predicates dynamically checking all unique raw nodes for each skill
         for category in ['preconditions', 'effects']:
-            for symbol_name in symbolic_bounds[category].keys():
-                parts = symbol_name.split('_')
-                prefix = parts[0]
+            for symbol_name, data in symbolic_bounds[category].items():
                 skill = data['skill']
-                node = data['node']
-        
-                if prefix == "Pre":
-                    problem_str += f"    (Pre-{skill} s{node})\n"
-                elif prefix == "Eff":
-                    problem_str += f"    (Eff-{skill} s{node})\n"
+                parts = symbol_name.split('_')
+                prefix = parts[0] # Will evaluate to "pre" or "eff"
+                
+                for node in data['raw_nodes']:
+                    problem_str += f"    ({prefix}_{skill} s{node})\n"
             
         problem_str += "  )\n"
         problem_str += "  (:goal\n"
@@ -419,20 +423,16 @@ class TheAgent(Agent):
         Reads the generated PDDL files, calls a local pyperplan solver, 
         and translates the output into a list of executable skill tuples.
         '''
-
-        # Fast-Failing: Ensure the files exist before wasting compute
         if not os.path.exists(self.domain_path) or not os.path.exists(self.problem_path):
             print("[Planner] Missing PDDL files. Cannot generate a plan.")
             return []
 
-        # Clean up any old solution file so we don't accidentally read stale data
         if os.path.exists(self.plan_file):
             os.remove(self.plan_file)
 
         # 1. Execute the local Pyperplan solver
         try:
             print("[Planner] Querying local Pyperplan solver...")
-            # subprocess.run blocks the thread safely until the solver finishes
             subprocess.run(
                 [sys.executable, "-m", "pyperplan", self.domain_path, self.problem_path],
                 capture_output=True,
@@ -440,29 +440,25 @@ class TheAgent(Agent):
                 check=True
             )
         except subprocess.CalledProcessError:
-            # Pyperplan returns a non-zero exit code if no path to the goal exists
             print("[Planner] Solver failed to find a valid path to the goal.")
             return []
         except FileNotFoundError:
             print("[Planner] Pyperplan not found. Did you run 'pip install pyperplan'?")
             return []
 
-        # 2. Check if the planner successfully created the solution file
         if not os.path.exists(self.plan_file):
             print("[Planner] Goal is unreachable. Returning empty plan.")
             return []
 
-        # 3. Parse the output and map back to executable skills
+        # 2. Parse the output and map back to executable skills
         executable_plan = []
     
         with open(self.plan_file, "r") as f:
             for line in f:
                 line = line.strip()
-                # Skip empty lines or Pyperplan comments
                 if not line or line.startswith(";"): 
                     continue 
 
-                # Pyperplan formats steps as "(moveforward s0 s1)"
                 parts = line.strip("()").split()
                 if len(parts) < 3:
                     continue
@@ -470,8 +466,7 @@ class TheAgent(Agent):
                 action_name_lower = parts[0]
                 target_state = parts[2]
 
-                # Case-Insensitive Mapping: Match the lowercased PDDL symbol 
-                # back to your PascalCase skillset keys
+                # Case-Insensitive Mapping because Pyperplan converts PDDL domains to lowercase natively
                 matched_skill = None
                 for skill_name in self.skillset.keys():
                     if skill_name.lower() == action_name_lower:
@@ -479,7 +474,6 @@ class TheAgent(Agent):
                         break
 
                 if matched_skill:
-                    # Return the tuple format required for your precondition checks
                     executable_plan.append((matched_skill, target_state))
 
         print(f"[Planner] Local plan found: {executable_plan}")

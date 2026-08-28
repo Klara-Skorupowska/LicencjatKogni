@@ -28,6 +28,7 @@
     <Compile Include="agent\agent_loop.py" />
     <Compile Include="agent\brain_network.py" />
     <Compile Include="agent\skills.py" />
+    <Compile Include="agent\skills_serial.py" />
     <Compile Include="agent\virtual_actuator.py" />
     <Compile Include="agent\virtual_sensor.py" />
     <Compile Include="communicator.py" />
@@ -42,6 +43,11 @@
     <Compile Include="simulation\stats_sim.py" />
     <Compile Include="main.py" />
     <Compile Include="simulation\__init__.py" />
+    <Compile Include="supervisor\core.py" />
+    <Compile Include="supervisor\data_collector.py" />
+    <Compile Include="supervisor\status_board.py" />
+    <Compile Include="supervisor\supervisor_loop.py" />
+    <Compile Include="supervisor\__init__.py" />
   </ItemGroup>
   <ItemGroup>
     <Interpreter Include="environment\">
@@ -73,9 +79,17 @@
     <Folder Include="logs\20260806_120009\telemetry\" />
     <Folder Include="logs\20260824_104610\" />
     <Folder Include="logs\20260824_104610\telemetry\" />
+    <Folder Include="logs\20260824_1105\" />
+    <Folder Include="logs\20260824_1105\telemetry\" />
+    <Folder Include="logs\20260824_1109\" />
+    <Folder Include="logs\20260824_1109\brain_network\" />
+    <Folder Include="logs\20260824_1109\telemetry\" />
+    <Folder Include="logs\20260824_1113\" />
+    <Folder Include="logs\20260824_1113\telemetry\" />
     <Folder Include="models\" />
     <Folder Include="models\urdfs\" />
     <Folder Include="additional_scripts\" />
+    <Folder Include="supervisor\" />
     <Folder Include="pddl\" />
     <Folder Include="simulation\" />
     <Folder Include="agent\" />
@@ -85,6 +99,12 @@
     <Content Include="logs\20260806_113529\telemetry\telemetry_epuck2.csv" />
     <Content Include="logs\20260806_120009\telemetry\telemetry_epuck2.csv" />
     <Content Include="logs\20260824_104610\telemetry\telemetry_epuck2.csv" />
+    <Content Include="logs\20260824_1105\telemetry\telemetry_epuck2.csv" />
+    <Content Include="logs\20260824_1109\brain_network\Live_Brain_Network_Viewer.png" />
+    <Content Include="logs\20260824_1109\brain_network\transgraph_final.graphml" />
+    <Content Include="logs\20260824_1109\brain_network\transgraph_live.graphml" />
+    <Content Include="logs\20260824_1109\telemetry\telemetry_epuck2.csv" />
+    <Content Include="logs\20260824_1113\telemetry\telemetry_epuck2.csv" />
     <Content Include="logs\brain_network_final.graphml" />
     <Content Include="logs\brain_network_live.graphml" />
     <Content Include="models\cube.xacro" />

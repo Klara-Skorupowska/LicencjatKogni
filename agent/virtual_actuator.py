@@ -1,5 +1,5 @@
 # a parent class for virtual actuators
-from turtle import left
+import time
 
 from communicator import Communicator
 class VirtualActuator():
@@ -29,4 +29,5 @@ class WheelsActuator(VirtualActuator):
         left_wheel, right_wheel = values
         wheel_msg = {"left": left_wheel, "right": right_wheel}
         self.bus.publish("/cmd/wheels", wheel_msg)
+        time.sleep(0.01)
 

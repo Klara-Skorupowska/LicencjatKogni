@@ -9,10 +9,14 @@
 ()  - zrobione, a nie było planowane
 ---------------------------------------
 ---------------------------------------
-### 06.08.2025 ###
-[] nowe skille: jednoznaczna kolejność wykonywania
+### 27.08.2026 ###
+[] poprawić GNG, bo nie tworzy rozrastającego się grafu
+
+### 06.08.2026 ###
+[o] nowe skille: jednoznaczna kolejność wykonywania
 [] klasa boga wszechwiedzącego do sprawdzania w oparciu o bezwzględną pozycję czy skill się udał i czy jest u celu
-[] i wtedy wyjdzie abstrahowanie per skill
+[^] abstrahowanie per skill
+
 ### 05.08.2026 ###
 [] poprawić zapisywanie logów: folder z czasem startu symulacji, czas trwania do znalezienia celu, ile razy wszedł w explore
 [] poprawić zapisywanie pddl: timestamp żeby nie tracić po każdym rerun
@@ -23,9 +27,9 @@
 [] zapisywanie planu zakończonego sukcesem
 [] zapisywać jaki jest błąd na GNG żeby móc dopasować treshold
 [o] dodać tagi do każdego printa np. [Planner]
-[] oduczyć go chodzić po ścianach (chyba najbardziej approach) - poprawić skille :(
+[x] oduczyć go chodzić po ścianach (chyba najbardziej approach) - poprawić skille :( --> nowe skille
 [o] wychodzi z pętli bez przechodzenia przez plan (nie powinien, nawet jeśli to sukces)
-[] Przyjrzeć się tworzeniu symboli, rozróżnić turn 'left'/'right', posługiwać się nazwami ze skillsetu
+[^] Przyjrzeć się tworzeniu symboli, rozróżnić turn 'left'/'right', posługiwać się nazwami ze skillsetu --> są nazwy ze skillsetu w pddl ale nie w GNG
 
 ### 04.08.2026 ###
 [o] dodać statystyki sieci

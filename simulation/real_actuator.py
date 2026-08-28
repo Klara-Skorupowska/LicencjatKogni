@@ -42,7 +42,7 @@ class WheelsActuator(RealActuator):
         super().__init__(bus)
         self.left_wheel_joint_index = None
         self.right_wheel_joint_index = None
-        self.max_velocity = 20.0
+        self.max_velocity = 30.0
         self.max_force = 10.0 
         self.left_wheel_velocity = 0.0
         self.right_wheel_velocity = 0.0

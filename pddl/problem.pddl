@@ -1,15 +1,10 @@
 (define (problem reach-end-pad)
   (:domain robot-skills)
   (:objects
-    s0 s41 s27 - state
+    s0 s23 - state
   )
   (:init
-    (robot-at s0)
-    (Pre-Turn s41)
-    (Pre-Turn s41)
-    (Eff-Turn s41)
-    (Eff-Turn s41)
-    (Eff-Turn s41)
+    (robot-at s23)
   )
   (:goal
     (robot-at s0)
