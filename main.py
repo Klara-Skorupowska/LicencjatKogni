@@ -17,9 +17,9 @@ def main():
     print("Open communication")
     bus = Communicator()
     ### ---- CHOOSE PARAMETERS HERE ---- ###
-    # BRAIN # agent #
+    ## agent ##
     agent = SkilledAgent(bus)
-    # BODY # simulation #
+    ## simulation ##
     robot = RealRobot(bus)
     arena = Arena()
     ### ---- ------ ---------- ---- ---- ###

@@ -39,6 +39,7 @@ class Environment():
             obj.setID(obj_id)
             obj.set_communicator(com)
             obj.setup()
+            obj.register_services()
 
     def update(self):
         for stat in self.stats:

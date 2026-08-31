@@ -16,7 +16,6 @@ def simulation_loop(bus: Communicator, setup_complete_event, robot: RealRobot, a
     world = Environment([robot, arena] + objects, stats_sim)
     time_step = 1.0 / 240.0
     world.setup(bus, time_step)
-    robot.set_end_pad_coords(arena.get_end_pad_coords()) # useless because supervisor does this
     setup_complete_event.set()
     print("Environment loaded.")
     

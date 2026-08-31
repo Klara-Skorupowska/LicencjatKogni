@@ -24,11 +24,16 @@ class Object():
 
         return urdf_path
 
+    def give_id(self, request=None):
+        ''' handler, to be registered in a subclass'''
+        return self.id
+
     def setID(self, id):
         ''' all sensors and actuators need to be updated here'''
         self.id = id
 
     def set_communicator(self, bus: Communicator):
+        self.bus = bus
         # set communicator for sensors and actuators if they exist
         if self.sensors is not None:
             self.bus = bus
@@ -46,6 +51,10 @@ class Object():
                         a.set_communicator(self.bus)
                 else:
                     actuator.set_communicator(self.bus)
+
+    def register_services(self):
+        assert not  self.bus is None
+        pass
 
     def _joint_name_to_index(self):
         # Map all joint names to their indices

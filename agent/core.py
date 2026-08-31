@@ -88,10 +88,10 @@ class SkilledAgent(Agent):
         velocity = 15
         self.skillset = {
             'SpotTheDoor': SpotTheColor(60, self.camera, self.lidars, self.wheels, velocity, min_dist, timeout=5.0),
-            'GoToTheDoor 2.0': GoToTheColor(60, self.camera, self.lidars, self.wheels, velocity, min_dist=min_dist, timeout=150000.0),
-            'GoThroughTheDoor': GoThroughTheDoor(self.camera, self.lidars, self.wheels, velocity, min_dist, max_dist = 0.08, timeout=15.0),
+            'GoToTheDoor 2.1': GoToTheDoor(bus, 60, self.camera, self.lidars, self.wheels, velocity, min_dist=min_dist, timeout=150000.0),
+            'GoThroughTheDoor': GoThroughTheDoor(bus, self.camera, self.lidars, self.wheels, velocity, min_dist, timeout=15.0),
             'SpotTheGoal': SpotTheColor(120, self.camera, self.lidars, self.wheels, velocity, min_dist, timeout=5.0),
-            'GoToTheGoal 2.0': GoToTheColor(120, self.camera, self.lidars, self.wheels, velocity, min_dist=min_dist, timeout=15.0),
+            'GoToTheGoal 2.1': GoToTheGoal(bus, 120, self.camera, self.lidars, self.wheels, velocity, min_dist=min_dist, timeout=15.0),
         }
         
     def read_state(self):

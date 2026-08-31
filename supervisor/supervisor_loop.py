@@ -13,6 +13,7 @@ def supervisor_loop(bus: Communicator, setup_complete_event, stop_event: threadi
     #world.setup(bus, time_step)
     # robot.set_end_pad_coords(arena.get_end_pad_coords()) useless
     setup_complete_event.set() 
+    god = Supervisor(bus)
     print("[SUPERVISOR] Loaded.")
     
     try:

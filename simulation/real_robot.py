@@ -19,14 +19,10 @@ class RealRobot(Object):
         self.sensors = {
             "lidars": RealSensorArray(self.bus, [LidarSensor(self.bus, ang, 0.1) for ang in [17, 50, 90, 150, 210, 270, 310, 343]]),
             "camera": CameraSensor(self.bus, [120, 160, 3]),
-            "goal": FinnishSensor(self.bus)
             }
         self.actuators = {
             "wheels": WheelsActuator(self.bus)
         }
-
-    def set_end_pad_coords(self, finnish_point):
-        self.sensors["goal"].end_pad_coords = finnish_point
 
     def setID(self, id):
         super().setID(id)
@@ -34,7 +30,10 @@ class RealRobot(Object):
             s.set_robot_id(id)
         for a in self.actuators.values():
             a.set_robot_id(id)
-        
+    
+    def register_services(self):
+        self.bus.register_service(f"/realrobot/give_id", self.give_id)
+
     def setup(self):
         # camera setup
         width = self.sensors["camera"].width
