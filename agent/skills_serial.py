@@ -1,5 +1,5 @@
-import random
-from turtle import clear
+
+from turtle import pen
 
 from .skills import *
 from communicator import Communicator
@@ -45,7 +45,7 @@ class SpotTheColor(Skill):
 
     def execute(self) -> bool:
         class_name = self.__class__.__name__
-        print(f"[Agent] Executing {class_name} skill. Hue: {self.hue}.")
+        print(f"[AGENT] Executing {class_name} skill. Hue: {self.hue}.")
 
         hue_tol = 25
 
@@ -74,7 +74,7 @@ class SpotTheColor(Skill):
                 # Check if door is centered
                 if abs(cx - frame_center_x) <= center_tolerance:
                     self.wheels.set_parameters([0.0, 0.0])
-                    print(f"[Agent] {self.__class__.__name__} finished successfully.")
+                    print(f"[AGENT] {self.__class__.__name__} finished successfully.")
                     return True
                 elif cx < frame_center_x:
                     # Door is to the left -> Turn Left
@@ -90,7 +90,138 @@ class SpotTheColor(Skill):
 
         # Timeout reached
         self.wheels.set_parameters([0.0, 0.0])
-        print(f"[Agent] {class_name} timed out.")
+        print(f"[AGENT] {class_name} timed out.")
+        return False
+
+class GoToTheColor(Skill):
+    '''
+    Approaches a specific colored object by Hue.
+    '''
+    def __init__(
+        self,
+        hue: int,
+        camera, 
+        lidars, 
+        wheels, 
+        velocity: float, 
+        min_dist: float, 
+        target_distance: float = 0.07,
+        distance_tolerance: float = 0.01,
+        timeout: float = 15.0
+    ):
+        super().__init__()
+        self.hue = hue
+        self.camera = camera 
+        self.lidars = lidars
+        self.wheels = wheels
+        self.velocity = velocity
+        self.min_dist = min_dist
+        self.target_distance = target_distance
+        self.distance_tolerance = distance_tolerance
+        self.timeout = timeout
+        self.center_tolerance = 10
+        self.hue_tolerance = 25
+
+
+    def _get_color_x_center(self, frame):
+        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    
+        # 2. Handle Hue wrapping (0-179 range in OpenCV)
+        lower1, upper1 = max(0, self.hue - self.hue_tolerance), min(179, self.hue + self.hue_tolerance)
+        mask = cv2.inRange(hsv, np.array([lower1, 50, 50]), np.array([upper1, 255, 255]))
+    
+        # Wrap around 0 (e.g., target hue is 5, we need 175-179 as well)
+        if self.hue - self.hue_tolerance < 0:
+            lower2 = 180 + (self.hue - self.hue_tolerance)
+            mask2 = cv2.inRange(hsv, np.array([lower2, 50, 50]), np.array([179, 255, 255]))
+            mask = cv2.bitwise_or(mask, mask2)
+        
+        # Wrap around 179 (e.g., target hue is 175, we need 0-5 as well)
+        elif self.hue + self.hue_tolerance > 179:
+            upper2 = (self.hue + self.hue_tolerance) - 180
+            mask2 = cv2.inRange(hsv, np.array([0, 50, 50]), np.array([upper2, 255, 255]))
+            mask = cv2.bitwise_or(mask, mask2)
+    
+        # Find the center of the colored object
+        M = cv2.moments(mask)
+        if M["m00"] == 0:
+            return None
+        return int(M["m10"] / M["m00"])
+
+    def execute(self) -> bool:
+        print(f"[AGENT] Executing {self.__class__.__name__} skill. Hue: {self.hue}.")
+        self.start_time = time.time()
+        # read sensors
+        frame = self.camera.read()
+        distances = self.lidars.read()
+        if frame is None: 
+            return False
+        # make calculations
+        image_center = frame.shape[1] / 2
+        color_center = self._get_color_x_center(frame)
+        if color_center is None:
+            self.wheels.set_parameters([0, 0])
+            print(f"[AGENT] {self.__class__.__name__} failed. No target color in sight.")
+            return False
+        while time.time() - self.start_time < self.timeout:
+            # read sensors
+            frame = self.camera.read()
+            distances = self.lidars.read()
+            if frame is None: 
+                continue
+            # make calculations
+            image_center = frame.shape[1] / 2
+            color_center = self._get_color_x_center(frame)
+            if color_center is None:
+                self.wheels.set_parameters([0, 0])
+                print(f"[AGENT] {self.__class__.__name__} failed. No target color in sight.")
+                return False
+            front_dist = min(distances[0], distances[7])
+
+            # check if we succeed
+            at_target_distance = ( abs(front_dist - self.target_distance) < self.distance_tolerance )
+            centered = ( abs(color_center - image_center) < self.center_tolerance )
+            
+            success = at_target_distance and centered
+            
+            if success:
+                self.wheels.set_parameters([0, 0])
+                print(f"[AGENT] {self.__class__.__name__} finished successfully.")
+                return True
+
+            # check if we can move freely
+            clear_path = ( distances[0] >= self.min_dist and distances[7] >= self.min_dist )
+            if not clear_path:
+                self.wheels.set_parameters([0, 0])
+                print(f"[AGENT] {self.__class__.__name__} failed. Obstacle ahead.")
+                return False
+
+            # 2 bools so 4 cases but 2 actions
+            def centering():
+                if color_center < image_center:
+                    self.wheels.set_parameters([self.velocity * 0.1, self.velocity])
+                elif color_center > image_center:
+                    self.wheels.set_parameters([self.velocity, self.velocity * 0.1])
+                time.sleep(0.01)
+                
+            def aproaching():
+                if front_dist < self.target_distance:
+                    self.wheels.set_parameters([ - self.velocity, - self.velocity])
+                elif front_dist > self.target_distance:
+                    self.wheels.set_parameters([self.velocity, self.velocity])
+                time.sleep(0.01)
+
+            # 1. == success
+            # 2.
+            if not at_target_distance and centered: aproaching()
+            # 3.
+            elif at_target_distance and not centered: centering()
+            # 4.
+            elif not at_target_distance and not centered: centering()
+
+
+        self.wheels.set_parameters([0, 0])
+        print(f"[AGENT] {self.__class__.__name__} failed. Timed out.")
         return False
 
 class GoToTheDoor(Skill):
@@ -190,7 +321,8 @@ class GoToTheDoor(Skill):
         return True 
 
     def _align(self) -> bool:
-        time_step = 1.0
+        time_step = 2.0
+        decay_rate = 0.5
         frame = self.camera.read()
         cx = self._get_green_cx(frame)
         if cx is None: return False
@@ -209,7 +341,7 @@ class GoToTheDoor(Skill):
             dir_old = dir_new
             dir_new = 'RIGHT' if cx > frame_center_x else 'LEFT'
                             # if direction changed: decrease <time_step>
-            if not (dir_new == dir_old): time_step = time_step/2
+            if not (dir_new == dir_old): time_step = time_step * decay_rate
             if not self._turn_from_the_wall(dir_new):
                 print("[DEBUG] ---------------------------------- FROM TURN") 
                 return False
@@ -237,7 +369,7 @@ class GoToTheDoor(Skill):
         return False
 
     def execute(self) -> bool:
-        print(f"[Agent] Executing {self.__class__.__name__} skill")
+        print(f"[AGENT] Executing {self.__class__.__name__} skill")
         self.start_time = time.time()
         while time.time() - self.start_time < self.timeout:        
             # snapshot: cx and lidars
@@ -248,7 +380,7 @@ class GoToTheDoor(Skill):
                 # if cx = None -> return False (lost track of the door)
             if cx is None:
                 self.wheels.set_parameters([0.0, 0.0])
-                print(f"[Agent] {self.__class__.__name__} failed. No door in sight.")
+                print(f"[AGENT] {self.__class__.__name__} failed. No door in sight.")
                 return False
 
             min_front = float(np.min([distances[0:2], distances[5:7]]))
@@ -263,31 +395,31 @@ class GoToTheDoor(Skill):
                     self.wheels.set_parameters([0, 0])
                     # are we here?
                     if self._align():
-                        print(f"[Agent] {self.__class__.__name__} finished successfully.")
+                        print(f"[AGENT] {self.__class__.__name__} finished successfully.")
                         return True
                     # or not
-                    print(f"[Agent] {self.__class__.__name__} failed. Obstacle ahead.")
+                    print(f"[AGENT] {self.__class__.__name__} failed. Obstacle ahead.")
                     self.wheels.set_parameters([0, 0])
                     return False
             else:
             # if not: turn to the wall/door so both front lidars have the same value 
                 direction = 'RIGHT' if distances[0] > distances[7] else 'LEFT'
                 if not self._turn_to_the_wall(direction): 
-                    print(f"[Agent]  {self.__class__.__name__} failed. Error while turning to the wall")
+                    print(f"[AGENT]  {self.__class__.__name__} failed. Error while turning to the wall")
                     return False
                 aligned = self._align()
                 # if align == True, align the distance to target_distance -> return True
                 # if false -> return False
                 if aligned:
-                    print(f"[Agent] {self.__class__.__name__} finished successfully.")
+                    print(f"[AGENT] {self.__class__.__name__} finished successfully.")
                     return True
                 else:
-                    print(f"[Agent] {self.__class__.__name__} failed.")
+                    print(f"[AGENT] {self.__class__.__name__} failed. Aligment problem.")
                     return False
             # if timeout -> return False
         # Timeout reached
         self.wheels.set_parameters([0, 0])
-        print("[Agent] Timed out.")
+        print(f"[AGENT] {self.__class__.__name__} failed. Timed out.")
         return False
 
 class GoThroughTheDoor(Skill):
@@ -301,6 +433,7 @@ class GoThroughTheDoor(Skill):
         wheels: VirtualActuator, 
         velocity: float, 
         min_dist: float,
+        max_dist: float,
         timeout: float = 15.0
     ):
         super().__init__()
@@ -309,19 +442,20 @@ class GoThroughTheDoor(Skill):
         self.wheels = wheels
         self.velocity = velocity
         self.min_dist = min_dist
+        self.max_dist = max_dist
         self.timeout = timeout
         self.start_time = None
 
     def execute(self)-> bool:
-        print(f"[Agent] Executing {self.__class__.__name__} skill")
+        print(f"[AGENT] Executing {self.__class__.__name__} skill")
         # Start moving forward
         self.wheels.set_parameters([self.velocity, self.velocity])
         distances = self.lidars.read()
         front_left_dist = distances[0]
         front_right_dist = distances[7]
 
-        if front_left_dist > self.min_dist and front_right_dist > self.min_dist:
-            print(f"[Agent] {self.__class__.__name__} failed. Not in front of the door.")
+        if front_left_dist > self.max_dist and front_right_dist > self.max_dist:
+            print(f"[AGENT] {self.__class__.__name__} failed. Not in front of the door.")
             return False  # No door detected in front, cannot open
 
         start_time = time.time()
@@ -339,7 +473,7 @@ class GoThroughTheDoor(Skill):
             front_is_clear = (front_left_dist > self.min_dist) and (front_right_dist > self.min_dist)
             if (door_on_left or door_on_right) and front_is_clear:
                 self.wheels.set_parameters([0.0, 0.0]) # halt
-                print(f"[Agent] {self.__class__.__name__} finished successfully.")
+                print(f"[AGENT] {self.__class__.__name__} finished successfully.")
                 return True # there was a door and we opened it successfully
             
             # 3. Yield to the CPU
@@ -347,7 +481,7 @@ class GoThroughTheDoor(Skill):
             
         # Timeout reached = there was a door but we failed to open it in time
         self.wheels.set_parameters([0.0, 0.0])
-        print(f"[Agent] {self.__class__.__name__} failed. Timed out.")
+        print(f"[AGENT] {self.__class__.__name__} failed. Timed out.")
         return False 
 
 class GoToTheGoal(Skill):
@@ -388,7 +522,7 @@ class GoToTheGoal(Skill):
         return None
 
     def execute(self):
-        print(f"[Agent] Executing {self.__class__.__name__} skill")
+        print(f"[AGENT] Executing {self.__class__.__name__} skill")
         self.start_time = time.time()
         while time.time() - self.start_time < self.timeout:        
             # snapshot: cx and lidars
@@ -399,7 +533,7 @@ class GoToTheGoal(Skill):
                 # if cx = None -> return False (lost track of the door)
             if cx is None:
                 self.wheels.set_parameters([0.0, 0.0])
-                print(f"[Agent] {self.__class__.__name__} failed. No goal in sight.")
+                print(f"[AGENT] {self.__class__.__name__} failed. No goal in sight.")
                 return False
 
             min_front = float(np.min([distances[0:2], distances[5:7]]))
@@ -407,12 +541,12 @@ class GoToTheGoal(Skill):
             if abs(min_front - self.target_distance) < self.distance_tolerance:
                 if centered:
                     self.wheels.set_parameters([0, 0])
-                    print(f"[Agent] {self.__class__.__name__} finished successfully.")
+                    print(f"[AGENT] {self.__class__.__name__} finished successfully.")
                     return True
             clear_path = ( float(np.min([distances[0:1], distances[6:7]])) > self.min_dist )
             if not clear_path and not centered:
                 self.wheels.set_parameters([0, 0])
-                print(f"[Agent] {self.__class__.__name__} failed. Obstacle ahead.")
+                print(f"[AGENT] {self.__class__.__name__} failed. Obstacle ahead.")
                 return False
 
             err = (cx - frame.shape[1] // 2) / frame.shape[1]
@@ -423,5 +557,5 @@ class GoToTheGoal(Skill):
 
         # Timeout reached
         self.wheels.set_parameters([0, 0])
-        print(f"[Agent] {self.__class__.__name__} failed. Timed out.")
+        print(f"[AGENT] {self.__class__.__name__} failed. Timed out.")
         return False

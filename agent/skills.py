@@ -42,7 +42,7 @@ class MoveForward(Skill):
         self.time = time
 
     def execute(self):
-        print("[Agent] Executing MoveForward skill")
+        print("[AGENT] Executing MoveForward skill")
         self.wheels.set_parameters([self.velocity, self.velocity])
         start_time = time.time()
         
@@ -83,7 +83,7 @@ class Turn(Skill):
         self.time = time
 
     def execute(self):
-        print(f"[Agent] Executing Turn skill. Direction {self.direction}")
+        print(f"[AGENT] Executing Turn skill. Direction {self.direction}")
         left = 1
         right = 1
         if self.direction == 'right':
@@ -126,7 +126,7 @@ class TurnAway(Skill):
         self.min_dist = min_dist
 
     def execute(self):
-        print("[Agent] Executing TurnAway skill.")
+        print("[AGENT] Executing TurnAway skill.")
         # 1. Find nearest obstacle
         front_left= self.lidar_front_left.read()
         front_right = self.lidar_front_right.read()
@@ -211,7 +211,7 @@ class OpenDoor(Skill):
         self.timeout = timeout
 
     def execute(self):
-        print("[Agent] Executing OpenDoor skill")
+        print("[AGENT] Executing OpenDoor skill")
         # Start moving forward
         self.wheels.set_parameters([self.velocity, self.velocity])
         
@@ -266,7 +266,7 @@ class Approach(Skill):
         self.epsilon = epsilon
 
     def execute(self):
-        print("[Agent] Executing Approach skill")
+        print("[AGENT] Executing Approach skill")
         # Start moving forward
         self.wheels.set_parameters([self.velocity, self.velocity])
         start_time = time.time()

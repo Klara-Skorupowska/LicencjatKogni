@@ -1,12 +1,12 @@
 (define (problem reach-end-pad)
   (:domain robot-skills)
   (:objects
-    s0 s23 - state
+    s1 - state
   )
   (:init
-    (robot-at s23)
+    (robot-at s1)
   )
   (:goal
-    (robot-at s0)
+    (robot-at s1)
   )
 )

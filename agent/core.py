@@ -1,7 +1,5 @@
 # parent class for an agent that thinks
 
-from agent.skills_serial import GoThroughTheDoor
-
 from .agent_loop import StatsAgent
 from communicator import Communicator
 from .virtual_actuator import *
@@ -77,31 +75,31 @@ class SimpleAgent(Agent):
 
 class SkilledAgent(Agent):
     '''
-    it just avoids running into walls but uses skills. at the start it tests some skills
+    skill testing agent.
     '''
     def __init__(self, bus: Communicator):
         super().__init__(bus)
         # Initialize sensors and actuators here
         self.wheels = WheelsActuator(self.bus)
         self.lidars = VirtualSensorArray(self.bus, [LidarSensor(self.bus, ang) for ang in [17, 50, 90, 150, 210, 270, 310, 343]])
-        self.cctv = CameraSensor(self.bus)
+        self.camera = CameraSensor(self.bus)
             # common parameters:
         min_dist = 0.05
-        velocity = 10
+        velocity = 15
         self.skillset = {
-            'MoveForward': MoveForward(self.lidars.sensors[0], self.lidars.sensors[7], self.wheels, velocity, min_dist, time=1.0),
-            'TurnRight': Turn('right', self.wheels, velocity, time=1.0),
-            'TurnLeft': Turn('left', self.wheels, velocity, time=1.0),
-            'TurnAway': TurnAway(self.lidars.sensors[0], self.lidars.sensors[7], self.lidars.sensors[2], self.lidars.sensors[5], self.wheels, velocity, min_dist),
-            'OpenDoor': OpenDoor(self.lidars.sensors[0], self.lidars.sensors[7], self.lidars.sensors[2], self.wheels, velocity, min_dist, timeout=7.0)
-            }
+            'SpotTheDoor': SpotTheColor(60, self.camera, self.lidars, self.wheels, velocity, min_dist, timeout=5.0),
+            'GoToTheDoor 2.0': GoToTheColor(60, self.camera, self.lidars, self.wheels, velocity, min_dist=min_dist, timeout=150000.0),
+            'GoThroughTheDoor': GoThroughTheDoor(self.camera, self.lidars, self.wheels, velocity, min_dist, max_dist = 0.08, timeout=15.0),
+            'SpotTheGoal': SpotTheColor(120, self.camera, self.lidars, self.wheels, velocity, min_dist, timeout=5.0),
+            'GoToTheGoal 2.0': GoToTheColor(120, self.camera, self.lidars, self.wheels, velocity, min_dist=min_dist, timeout=15.0),
+        }
         
     def read_state(self):
         '''Read the current state of the agent and return if there is a danger in front of us - two possible states '''
         # are we in danger? we have to duck if there is anything in front of us:
         duck = False
         self.lidars.read()
-        self.cctv.read() # just to update the camera frame, we don't use it here
+        self.camera.read() # just to update the camera frame, we don't use it here
         for sensor in self.lidars.sensors:
             if (sensor.lidar_direction < 45 or sensor.lidar_direction > 315) and sensor.value < 0.07:
                 duck = True
@@ -109,38 +107,16 @@ class SkilledAgent(Agent):
         return duck
 
     def run(self):
-        self.read_state()
-        if not self.skillset['OpenDoor'].execute():
-            print("OpenDoor failed :(")
-        else:
-            print("OpenDoor succeeded :)")
-        if not self.skillset['TurnRight'].execute():
-            print("TurnRight failed :(")
-        else:
-            print("TurnRight succeeded :)")
-        if not self.skillset['TurnLeft'].execute():
-            print("TurnLeft failed :(")
-        else:            
-           print("TurnLeft succeeded :)")    
-
         while True:
             duck = self.read_state()
             if duck:
-                if not self.skillset['TurnAway'].execute():
-                    print("TurnAway failed :(")
-                else: 
-                    print("TurnAway succeeded :)")
-            else:
-                if not self.skillset['MoveForward'].execute():
-                    print("MoveForward failed :(")
-                else: 
-                    print("MoveForward succeeded :)")
-
-import os
-import sys
-import subprocess
-import random
-import numpy as np
+                print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> Oh noo, tha wall...")
+            time.sleep(1.0)
+            for name, skl in self.skillset.items():
+                if not skl.execute():
+                    print(f" {name} failed.")
+                    time.sleep(1.0)
+            
 
 class TheAgent(Agent):
     '''
@@ -158,11 +134,11 @@ class TheAgent(Agent):
         min_dist = 0.05
         velocity = 15
         self.skillset = {
-            'SpotTheDoor': SpotTheColor(60, self.camera, self.lidars, self.wheels, velocity, min_dist, timeout=10.0),
-            'GoToTheDoor': GoToTheDoor(self.camera, self.lidars, self.wheels, velocity, min_dist=min_dist, timeout=20.0),
-            'GoThroughTheDoor': GoThroughTheDoor(self.camera, self.lidars, self.wheels, velocity, min_dist, timeout=15.0),
-            'SpotTheGoal': SpotTheColor(120, self.camera, self.lidars, self.wheels, velocity, min_dist, timeout=10.0),
-            'GoToTheGoal': GoToTheGoal(self.camera, self.lidars, self.wheels, velocity, min_dist=min_dist, timeout=20.0),
+            'SpotTheDoor': SpotTheColor(60, self.camera, self.lidars, self.wheels, velocity, min_dist, timeout=5.0),
+            'GoToTheDoor': GoToTheDoor(self.camera, self.lidars, self.wheels, velocity, min_dist=min_dist, timeout=15.0),
+            'GoThroughTheDoor': GoThroughTheDoor(self.camera, self.lidars, self.wheels, velocity, min_dist, max_dist=0.08, timeout=15.0),
+            'SpotTheGoal': SpotTheColor(120, self.camera, self.lidars, self.wheels, velocity, min_dist, timeout=5.0),
+            'GoToTheGoal': GoToTheGoal(self.camera, self.lidars, self.wheels, velocity, min_dist=min_dist, timeout=15.0),
         }
         
         # Add a brain
@@ -178,7 +154,7 @@ class TheAgent(Agent):
         try:
             n = 50
             for step in range(n):
-                print(f"[Agent] Step {step}/{n}")
+                print(f"[AGENT] Step {step}/{n}")
                 # 0. Update statistics
                 for s in self.stats:
                     s.update()
@@ -200,7 +176,7 @@ class TheAgent(Agent):
                         
                 if goal_node_id is None:
                     # If goal is not yet known, fallback to exploration
-                    print("[Agent] Goal not discovered yet. Continuing exploration...")
+                    print("[AGENT] Goal not discovered yet. Continuing exploration...")
                     self.explore()
                     continue
 
@@ -265,7 +241,7 @@ class TheAgent(Agent):
                             break # Break to Create PDDL loop
                         else:
                             # yes -> Finnish
-                            print("[Agent] Successful plan noted.!")
+                            print("[AGENT] Successful plan noted.!")
                             with open("pddl/successful_plan.txt", "w") as f:
                                 f.write("Successful Plan Executed:\n")
                                 for p_step, (p_skill, p_target) in enumerate(plan, 1):
@@ -276,12 +252,12 @@ class TheAgent(Agent):
                         break # Break out to Main Loop -> Read State
                     if needs_replan:
                         continue # Loop back to -> Create PDDL
-            print("[Agent] The End")
+            print("[AGENT] The End")
                 
         finally:
             self.finnished.read()
             if self.finnished.value:
-                print("[Agent] Successfully reached goal")
+                print("[AGENT] Successfully reached goal")
             for s in self.stats:
                 s.close()
                 
@@ -310,7 +286,7 @@ class TheAgent(Agent):
         '''
         Execute random action, update nets if it brings new info
         '''
-        print("[Agent] Exploring...")
+        print("[AGENT] Exploring...")
         while True:
             # read state
             prev_state_id, prev_state_vector = self.read_state()
@@ -416,7 +392,7 @@ class TheAgent(Agent):
         with open(self.problem_path, "w") as f:
             f.write(problem_str)
         
-        print(f"[Agent] Generated on-demand PDDL for {len(states)} abstract states.")
+        print(f"[AGENT] Generated on-demand PDDL for {len(states)} abstract states.")
 
     def make_plan(self):
         ''' 

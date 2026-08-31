@@ -16,15 +16,20 @@ class Arena(Object):
     def act(self):
         print("EnvArena: act() method called, but no actuators to act.")
 
+
+    def setup(self):
+        door_hinge_index = self._joint_name_to_index().get("door_hinge")
+        p.setJointMotorControl2(
+            bodyUniqueId=self.id,
+            jointIndex=door_hinge_index,
+            controlMode=p.POSITION_CONTROL,
+            targetPosition=0.0,  # closed
+            force=0.01           # pushing force
+        )
+
     def get_end_pad_coords(self):
-        joint_name_to_index = {}
-    
-        # Map all joint names to their indices
-        for i in range(p.getNumJoints(self.id)):
-            joint_info = p.getJointInfo(self.id, i)
-            joint_name = joint_info[1].decode('utf-8') 
-            joint_name_to_index[joint_name] = i
         
+        joint_name_to_index = self._joint_name_to_index()
         # Get the index of the target joint
         end_pad_idx = joint_name_to_index.get("end_joint")
     

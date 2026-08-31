@@ -18,9 +18,9 @@ class BrainNetwork:
         self.epsilon_b = 0.2
         self.epsilon_n = 0.006
         self.max_age = 50
-        self.alpha = 0.5  # Error reduction factor
-        self.spawn_threshold = 1   # Only spawn if the worst error is higher than this
-        self.beta = 0.99           # Error decay factor per step
+        self.alpha = 0.5            # Error reduction factor
+        self.spawn_threshold = 0.1    # Only spawn if the worst error is higher than this
+        self.beta = 0.99            # Error decay factor per step
         self.step_counter = 0
 
         self.transitional_map = nx.DiGraph()
@@ -68,7 +68,7 @@ class BrainNetwork:
         '''
         Updates both networks. Accessed only when prediction fails (new environment state).
         '''
-        print("[Brain] Updating networks...")
+        print("[BRAIN] Updating networks...")
         self._update_scaling(prev_state)
         self._update_scaling(current_state)
 

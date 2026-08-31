@@ -23,7 +23,7 @@
 		<color rgba="1 1 1 1"/>
 	</material>
 	<material name="black">
-		<color rgba="0 0 0 1"/>
+		<color rgba="0.2 0.2 0.2 1"/>
 	</material>
 	<material name="green">
 		<color rgba="0 1 0 1"/>
@@ -216,6 +216,6 @@
 		<origin xyz="0 ${(door_size/2)} 0" rpy="0 0 0"/>
 		<axis xyz="0 0 1"/>
 		<limit effort="100" lower="-1.57" upper="1.57" velocity="25"/>
-		<dynamics damping="0.01" friction="${door_friction}"/>
+		<dynamics damping="0.05" friction="${door_friction}" spring_stiffness="0.02" spring_reference="0"/>
 	</joint>
 </robot>

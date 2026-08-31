@@ -5,15 +5,15 @@ import time
 
 def supervisor_loop(bus: Communicator, setup_complete_event, stop_event: threading.Event):
     """Runs continuously at 60Hz, completely independent of the agent and simulation."""
-    print("[Supervisor] Starting...")
-    print("[Supervisor] Loading statistics...")
+    print("[SUPERVISOR] Starting...")
+    print("[SUPERVISOR] Loading statistics...")
     # status boards
     # colectiong data
     time_step = 1.0 / 60.0
     #world.setup(bus, time_step)
     # robot.set_end_pad_coords(arena.get_end_pad_coords()) useless
     setup_complete_event.set() 
-    print("[Supervisor] Loaded.")
+    print("[SUPERVISOR] Loaded.")
     
     try:
         while not stop_event.is_set():
@@ -22,7 +22,7 @@ def supervisor_loop(bus: Communicator, setup_complete_event, stop_event: threadi
             pass
 
     except KeyboardInterrupt:
-        print("[Supervisor] Thread stopped by user.")
+        print("[SUPERVISOR] Thread stopped by user.")
     finally:
         #world.close()
-        print("[Supervisor] Supervisors closed safely.")
+        print("[SUPERVISOR] Supervisor closed safely.")

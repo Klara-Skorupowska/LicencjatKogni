@@ -18,7 +18,7 @@ def main():
     bus = Communicator()
     ### ---- CHOOSE PARAMETERS HERE ---- ###
     # BRAIN # agent #
-    agent = TheAgent(bus)
+    agent = SkilledAgent(bus)
     # BODY # simulation #
     robot = RealRobot(bus)
     arena = Arena()

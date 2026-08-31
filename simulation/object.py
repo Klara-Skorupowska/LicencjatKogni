@@ -1,6 +1,7 @@
 ### parent class for all environment objects
 import xacro
 import numpy as np
+import pybullet as p
 from communicator import Communicator
 
 class Object():
@@ -45,6 +46,21 @@ class Object():
                         a.set_communicator(self.bus)
                 else:
                     actuator.set_communicator(self.bus)
+
+    def _joint_name_to_index(self):
+        # Map all joint names to their indices
+        joint_name_to_index = {}
+        for i in range(p.getNumJoints(self.id)):
+            joint_info = p.getJointInfo(self.id, i)
+            joint_name = joint_info[1].decode('utf-8') 
+            joint_name_to_index[joint_name] = i
+        return joint_name_to_index
+
+    def setup(self):
+        '''
+        for any additional pybullet set up needed
+        '''
+        pass
 
     def sense(self):
         raise NotImplementedError("The sense() method must be implemented in the subclass.")

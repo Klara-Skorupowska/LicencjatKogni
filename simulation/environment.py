@@ -38,6 +38,7 @@ class Environment():
             obj_id = p.loadURDF(urdf_path, obj.initial_position, obj.initial_orientation, useFixedBase=obj.anchored)
             obj.setID(obj_id)
             obj.set_communicator(com)
+            obj.setup()
 
     def update(self):
         for stat in self.stats:

@@ -79,26 +79,37 @@ class CameraSensor(RealSensor):
         self.robot_id = None
         self.height, self.width, self.channels = res
         if self.channels not in (1, 3, 4): raise ValueError(f"Incorrect number of channels: {self.channels}. Expected 1, 3, or 4.")
+        self.link_index = None
+        self.projection_matrix = None
         self.frame = None
 
         self.bus.register_service("/sensor/camera/sense", self.sense)
 
     def sense(self, request=None):
         ''' This is the Service Handler. '''
-        pos, orient = p.getBasePositionAndOrientation(self.robot_id)
-        matrix = p.getMatrixFromQuaternion(orient)
-        forward = [matrix[0], matrix[3], matrix[6]]
-        up = [matrix[2], matrix[5], matrix[8]]
-        
-        cam_pos = [pos[0] + forward[0]*0.02, pos[1] + forward[1]*0.02, pos[2] + 0.005]
-        target = [cam_pos[0] + forward[0], cam_pos[1] + forward[1], cam_pos[2] + forward[2]]
+        link_state = p.getLinkState(self.robot_id, self.link_index)
+        cam_pos = link_state[0] # [x, y, z] kamery w świecie
+        cam_orn = link_state[1] # Kwaternion rotacji kamery w świecie
 
-        view_matrix = p.computeViewMatrix(cameraEyePosition=cam_pos, cameraTargetPosition=target, cameraUpVector=up)
-        proj_matrix = p.computeProjectionMatrixFOV(90, self.width / self.height, 0.001, 10.0)
+        rot_matrix = p.getMatrixFromQuaternion(cam_orn)
+    
+        forward_vec = np.array([rot_matrix[0], rot_matrix[3], rot_matrix[6]])
+        up_vec = np.array([rot_matrix[2], rot_matrix[5], rot_matrix[8]])
+    
+        target_pos = cam_pos + forward_vec
+
+        view_matrix = p.computeViewMatrix(
+            cameraEyePosition=cam_pos,
+            cameraTargetPosition=target_pos,
+            cameraUpVector=up_vec
+        )
+
+        img_data = p.getCameraImage(
+            self.width, self.height, view_matrix, self.projection_matrix, 
+            renderer=p.ER_TINY_RENDERER # or p.ER_BULLET_HARDWARE_OPENGL for speed
+        )
         
-        img_arr = p.getCameraImage(self.width, self.height, view_matrix, proj_matrix, renderer=p.ER_BULLET_HARDWARE_OPENGL)
-        
-        rgba = np.reshape(img_arr[2], (self.height, self.width, 4)).astype(np.uint8) # all 4 channels
+        rgba = np.reshape(img_data[2], (self.height, self.width, 4)).astype(np.uint8) # all 4 channels
 
         # Convert image format based on channels count
         if self.channels == 1: # Grayscale
@@ -140,7 +151,7 @@ class LidarSensor(RealSensor):
             matrix[3] * cos_a + matrix[4] * sin_a,
             matrix[6] * cos_a + matrix[7] * sin_a
         ]
-        start = [pos[0] + sensor_dir[0] * 0.036, pos[1] + sensor_dir[1] * 0.036, pos[2]]
+        start = [pos[0] + sensor_dir[0] * 0.036, pos[1] + sensor_dir[1] * 0.036, pos[2] + 0.015]
         end = [start[0] + sensor_dir[0] * self.sensor_range, start[1] + sensor_dir[1] * self.sensor_range, start[2]]
         ray = p.rayTest(start, end)
         self.value = ray[0][2] * self.sensor_range
