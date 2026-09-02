@@ -87,6 +87,85 @@ class SpotTheColor(Skill):
         print(f"[AGENT] {class_name} failed. Timed out.")
         return False
 
+class ClearThePath(Skill):
+    '''
+    Clears the path in front by turning and running away.
+    '''
+    def __init__(
+        self,
+        bus: Communicator,
+        camera, 
+        lidars, 
+        wheels, 
+        velocity: float, 
+        min_dist: float,
+        run_time: float,
+        timeout: float = 15.0
+    ):
+        super().__init__()
+        self.bus = bus
+        self.camera = camera 
+        self.lidars = lidars
+        self.wheels = wheels
+        self.velocity = velocity
+        self.min_dist = min_dist
+        self.run_time = run_time
+        self.timeout = timeout
+
+    def execute(self) -> bool:
+        print(f"[AGENT] Executing {self.__class__.__name__} skill.")
+        start_time = time.time()
+        tolerance = 0.005
+        # helpers
+        def turn() -> bool:
+            frame = self.camera.read()
+            distances = self.lidars.read()
+            if distances[0] < distances[7]:
+                self.wheels.set_parameters([ - self.velocity, self.velocity])
+            else:
+                self.wheels.set_parameters([self.velocity, - self.velocity])
+            while time.time() - start_time < self.timeout:
+                distances = self.lidars.read()
+                clear_path = (( distances[0] > self.min_dist + tolerance ) and ( distances[7] > self.min_dist + tolerance ))
+                if clear_path:
+                    return True
+            self.wheels.set_parameters([0, 0])
+            print(f"[AGENT] {self.__class__.__name__} failed. Timed out. TURN")
+            return False
+
+        def move() -> bool:
+            start_run = time.time()
+            self.wheels.set_parameters([self.velocity, self.velocity])
+            while time.time() - start_run < self.run_time:
+                # sensors
+                frame = self.camera.read()
+                distances = self.lidars.read()
+                if time.time() - start_time > self.timeout:
+                    self.wheels.set_parameters([0, 0])
+                    print(f"[AGENT] {self.__class__.__name__} failed. Timed out. MOVE")
+                    return False
+                clear_path = (( distances[0] > self.min_dist + tolerance ) and ( distances[7] > self.min_dist + tolerance ))
+                if not clear_path:
+                    return True if turn() else False
+
+
+        # loops:::
+        # sensors
+        frame = self.camera.read()
+        distances = self.lidars.read()
+        # calculations
+        ## all obstacles = bad
+        if max(distances) < self.min_dist + tolerance:
+            self.wheels.set_parameters([0, 0])
+            print(f"[AGENT] {self.__class__.__name__} failed. Nowhere to run.")
+            return False
+        ## find clear path:
+        if turn() and move():
+            self.wheels.set_parameters([0,0])
+            print(f"[AGENT] {self.__class__.__name__} finished successfully.")
+            return True
+
+
 class GoToTheColor(Skill):
     '''
     Approaches a specific colored object by Hue.

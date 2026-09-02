@@ -10,13 +10,14 @@
 ---------------------------------------
 ---------------------------------------
 ### 31.08.2026 ###
-
+[] w move coś brakuje
+[] zależności się sypią: main: agent tworząc się potrzebuje odpowiedzi od nadzorcy
 
 ### 27.08.2026 ###
 [o] niech drzwi się same zamykają
 [] poprawić GNG, bo nie tworzy rozrastającego się grafu
-[] usunąć sensor mety - supervisor to robi
-[] supervisor sprawdza skuteczność wykonania skilli [patrz notatnik]
+[o] usunąć sensor mety - supervisor to robi
+[o] supervisor sprawdza skuteczność wykonania skilli [patrz notatnik]
 
 ### 06.08.2026 ###
 [o] nowe skille: jednoznaczna kolejność wykonywania

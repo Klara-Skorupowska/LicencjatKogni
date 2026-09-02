@@ -18,7 +18,7 @@ def main():
     bus = Communicator()
     ### ---- CHOOSE PARAMETERS HERE ---- ###
     ## agent ##
-    agent = SkilledAgent(bus)
+    agent = TheAgent(bus)
     ## simulation ##
     robot = RealRobot(bus)
     arena = Arena()
@@ -35,10 +35,10 @@ def main():
     agent_thread = threading.Thread(target=agent_loop, args=(bus, agent, stop_event, ), daemon=True)
     # start 
     print("Start Nodes")
-    physics_thread.start()
-    simulation_ready_event.wait()
     supervisor_thread.start()
     supervisor_ready_event.wait()
+    physics_thread.start()
+    simulation_ready_event.wait()
     agent_thread.start()
 
     # end 

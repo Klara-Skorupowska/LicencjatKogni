@@ -92,6 +92,7 @@ class SkilledAgent(Agent):
             'GoThroughTheDoor': GoThroughTheDoor(bus, self.camera, self.lidars, self.wheels, velocity, min_dist, timeout=15.0),
             'SpotTheGoal': SpotTheColor(120, self.camera, self.lidars, self.wheels, velocity, min_dist, timeout=5.0),
             'GoToTheGoal 2.1': GoToTheGoal(bus, 120, self.camera, self.lidars, self.wheels, velocity, min_dist=min_dist, timeout=15.0),
+            'ClearThePath': ClearThePath(bus, self.camera, self.lidars, self.wheels, velocity, min_dist=min_dist, run_time=2.0, timeout=15.0),
         }
         
     def read_state(self):
@@ -107,10 +108,12 @@ class SkilledAgent(Agent):
         return duck
 
     def run(self):
+        self.skillset["ClearThePath"].execute()
         while True:
             duck = self.read_state()
             if duck:
                 print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> Oh noo, tha wall...")
+
             time.sleep(1.0)
             for name, skl in self.skillset.items():
                 if not skl.execute():
@@ -135,15 +138,16 @@ class TheAgent(Agent):
         velocity = 15
         self.skillset = {
             'SpotTheDoor': SpotTheColor(60, self.camera, self.lidars, self.wheels, velocity, min_dist, timeout=5.0),
-            'GoToTheDoor': GoToTheDoor(self.camera, self.lidars, self.wheels, velocity, min_dist=min_dist, timeout=15.0),
-            'GoThroughTheDoor': GoThroughTheDoor(self.camera, self.lidars, self.wheels, velocity, min_dist, max_dist=0.08, timeout=15.0),
+            'GoToTheDoor': GoToTheDoor(bus, 60, self.camera, self.lidars, self.wheels, velocity, min_dist=min_dist, timeout=150000.0),
+            'GoThroughTheDoor': GoThroughTheDoor(bus, self.camera, self.lidars, self.wheels, velocity, min_dist, timeout=15.0),
             'SpotTheGoal': SpotTheColor(120, self.camera, self.lidars, self.wheels, velocity, min_dist, timeout=5.0),
-            'GoToTheGoal': GoToTheGoal(self.camera, self.lidars, self.wheels, velocity, min_dist=min_dist, timeout=15.0),
+            'GoToTheGoal': GoToTheGoal(bus, 120, self.camera, self.lidars, self.wheels, velocity, min_dist=min_dist, timeout=15.0),
+            'ClearThePath': ClearThePath(bus, self.camera, self.lidars, self.wheels, velocity, min_dist=min_dist, run_time=2.0, timeout=15.0),
         }
         
         # Add a brain
         self.brain = BrainNetwork()
-        self.finnished = FinnishSensor(bus)
+        self.finnished = self.bus.call_service(f"/supervisor/ask/goal_zone")
         
         # PDDL files
         self.domain_path = "pddl/domain.pddl"
