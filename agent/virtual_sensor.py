@@ -22,21 +22,6 @@ class VirtualSensorArray(VirtualSensor):
         self.value = [sensor.read() for sensor in self.sensors]
         return self.value
 
-class FinnishSensor(VirtualSensor):
-    '''
-    for final check only
-    '''
-    def __init__(self, bus: Communicator):
-        super().__init__(bus)
-        self.value = None
-
-
-    def read(self):
-        self.value = self.bus.call_service(f"/sensor/finnish/sense")
-        if self.value== True: print("[Sensors] Goal achived")
-        return self.value
-
-
 class LidarSensor(VirtualSensor):
     def __init__(self, bus: Communicator, lidar_direction):
         '''
@@ -53,158 +38,72 @@ class LidarSensor(VirtualSensor):
 class CameraSensor(VirtualSensor):
     def __init__(self, bus: Communicator):
         '''
-        res (resolution) - [heigth, width, channels]
+        Expected res (resolution) - [120, 160, 3]
         '''
         super().__init__(bus)
-        self.frame = None # raw frame from the camera
-        self.coded = None # information from the frame: colors and edges
+        self.frame = None 
+        self.coded = None 
 
     def read(self):
         self.frame = self.bus.call_service("/sensor/camera/sense")
         return self.frame
 
-    def show_hue_debug_grid(self, mean_hues, original_shape):
-        """
-        Visualizes the 3x3 grid of mean hues.
-    
-        mean_hues: List of 9 floats (0.0 to 1.0)
-        original_shape: The shape of the original camera frame (e.g., frame.shape)
-        """
-        h, w = original_shape[:2]
-        cell_h = h // 3
-        cell_w = w // 3
-    
-        # 1. Create a blank image in HSV color space
-        debug_hsv = np.zeros((h, w, 3), dtype=np.uint8)
-    
-        # 2. Set Saturation and Value to maximum (255) for pure, bright colors
-        debug_hsv[:, :, 1] = 255
-        debug_hsv[:, :, 2] = 255
-    
-        # 3. Fill the grid cells with the calculated hues
-        for i in range(3):
-            for j in range(3):
-                # Extract the correct hue from the flat list (0 to 8)
-                idx = i * 3 + j
-                norm_hue = mean_hues[idx]
-            
-                # Convert normalized hue (0.0-1.0) back to OpenCV's (0-179) scale
-                cv_hue = int(norm_hue * 179)
-            
-                # Calculate pixel boundaries, ensuring we cover the edges perfectly
-                y_start = i * cell_h
-                y_end = (i + 1) * cell_h if i < 2 else h
-                x_start = j * cell_w
-                x_end = (j + 1) * cell_w if j < 2 else w
-            
-                # Apply the hue to the H channel (index 0) of this specific cell
-                debug_hsv[y_start:y_end, x_start:x_end, 0] = cv_hue
-            
-        # 4. Convert back to BGR so OpenCV can display it on your screen
-        debug_bgr = cv2.cvtColor(debug_hsv, cv2.COLOR_HSV2BGR)
-    
-        # 5. Draw black grid lines so you can easily see the cell boundaries
-        for i in range(1, 3):
-            cv2.line(debug_bgr, (0, i * cell_h), (w, i * cell_h), (0, 0, 0), 2)
-            cv2.line(debug_bgr, (i * cell_w, 0), (i * cell_w, h), (0, 0, 0), 2)
-        
-        # 6. Show the frame
-        cv2.imshow("Mean Hues Debug", debug_bgr)
-        cv2.waitKey(1)
-
     def preprocess(self):
         '''
-        preprocess the frame for the neural network: returns 9 colors (RGB) and 4 edge counts (vertical , horizontal, diagonal left, diagonal right)
+        Processes a uniform grid of 20x20 receptive fields (6 rows x 8 cols = 48 fields).
+        Returns a flat array containing [ON-center, OFF-center, Mean R, Mean G, Mean B] per field.
         '''
         if self.frame is None:
             raise ValueError("No frame available. Please call read() before preprocess().")
 
-        # calculate the average color (hue) of the frame devided into 3x3 grid
-        # 1. Convert to HSV and extract ONLY the Hue channel
-        hsv_frame = cv2.cvtColor(self.frame, cv2.COLOR_BGR2HSV)
-        hue_channel = hsv_frame[:, :, 0] # OpenCV stores Hue as 0-179 (half of 360)
+        # Ensure frame is 120x160 for the 20x20 grid mapping
+        h, w = self.frame.shape[:2]
+        if h != 120 or w != 160:
+            frame = cv2.resize(self.frame, (160, 120))
+        else:
+            frame = self.frame
+
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         
-        # Pre-calculate cell dimensions for speed
-        h, w = hue_channel.shape
-        cell_h = h // 3
-        cell_w = w // 3
-        
-        mean_hues = []
-        for i in range(3):
-            for j in range(3):
-                # 2. Slice the 3x3 grid
-                grid = hue_channel[i * cell_h : (i + 1) * cell_h, j * cell_w : (j + 1) * cell_w]
-                
-                # 3. Convert OpenCV Hue (0-179) to radians (0 to 2*pi)
-                # Multiply by 2.0 to restore the 360 scale, then convert to radians
-                hue_rad = np.deg2rad(grid.astype(float) * 2.0)
-                
-                # 4. Calculate Circular Mean using Cosine and Sine
-                mean_x = np.mean(np.cos(hue_rad))
-                mean_y = np.mean(np.sin(hue_rad))
-                
-                # Convert back to an angle (-pi to +pi)
-                mean_angle_rad = np.arctan2(mean_y, mean_x)
-                
-                # Convert back to degrees (0 to 360)
-                mean_angle_deg = np.rad2deg(mean_angle_rad)
-                if mean_angle_deg < 0:
-                    mean_angle_deg += 360.0
-                    
-                # 5. Normalize to 0.0 - 1.0 for the GNG State Array
-                mean_hues.append(float(mean_angle_deg / 360.0))
+        # Grid dimensions: 6 rows, 8 columns of 20x20 blocks
+        patch_size = 20
+        rows = 120 // patch_size  # 6
+        cols = 160 // patch_size  # 8
 
-        # calculate edge counts using cv2
-        # 1. Blur to remove minor noise before edge detection
-        blurred = cv2.GaussianBlur(self.frame, (5, 5), 0)
-        gray = cv2.cvtColor(blurred, cv2.COLOR_BGR2GRAY)
-        edges = cv2.Canny(gray, 100, 200)
+        # Core size for 20x20 receptive field (10x10 core)
+        core_s = patch_size // 2
+        core_offset = (patch_size - core_s) // 2
+        surround_pixels = (patch_size * patch_size) - (core_s * core_s)
 
-        # 2. Extract line segments
-        # rho=1, theta=pi/180, threshold=50, minLineLength=30, maxLineGap=10
-        lines = cv2.HoughLinesP(edges, 1, np.pi/180, threshold=30, minLineLength=30, maxLineGap=10)
+        output = []
 
-        ### --- DEBUGGING VISUALIZATION ---
-        # add them in pink to the blurred image for debugging
-        if lines is not None:
-            for line in lines:
-                x1, y1, x2, y2 = line[0]
-                cv2.line(blurred, (x1, y1), (x2, y2), (255, 0, 255), 2)
+        for r in range(rows):
+            for c in range(cols):
+                y = r * patch_size
+                x = c * patch_size
 
-        cv2.imshow("Blurred", blurred)
-        cv2.imshow("Edges", edges)
-        self.show_hue_debug_grid(mean_hues, self.frame.shape)
-        cv2.waitKey(1)
-        ### --- DEBUGGING VISUALIZATION END ---
+                bgr_roi = frame[y:y + patch_size, x:x + patch_size]
+                gray_roi = gray[y:y + patch_size, x:x + patch_size]
 
-        # 3. Initialize counts for your 4 target variables
-        vertical_count = 0
-        horizontal_count = 0
-        diag_45_count = 0
-        diag_135_count = 0
+                # Mean RGB normalized to [0.0, 1.0] (OpenCV uses BGR)
+                mean_b = np.mean(bgr_roi[:, :, 0]) / 255.0
+                mean_g = np.mean(bgr_roi[:, :, 1]) / 255.0
+                mean_r = np.mean(bgr_roi[:, :, 2]) / 255.0
 
-        if lines is not None:
-            for line in lines:
-                x1, y1, x2, y2 = line[0]
-        
-                # Calculate the angle of the line (-180 to 180)
-                angle = np.arctan2(y2 - y1, x2 - x1) * 180.0 / np.pi
-        
-                # Normalize the angle to be strictly between 0 and 180 degrees
-                if angle < 0:
-                    angle += 180.0
-            
-                # 4. Bucket the line into the correct category based on its angle
-                if angle < 10 or angle > 170:
-                    horizontal_count += 1
-                elif 80 < angle < 100:
-                    vertical_count += 1
-                elif 35 <= angle <= 55:
-                    diag_45_count += 1    # The '\' direction
-                elif 125 <= angle <= 145:
-                    diag_135_count += 1   # The '/' direction
+                # Center patch (10x10) and surround calculation
+                center_patch = gray_roi[core_offset:core_offset + core_s, core_offset:core_offset + core_s]
+                mean_center = np.mean(center_patch) / 255.0
 
-        # The 4 ints you need for your state array
-        edge_counts = [vertical_count, horizontal_count, diag_45_count, diag_135_count]
+                total_sum = np.sum(gray_roi)
+                center_sum = np.sum(center_patch)
+                mean_surround = (total_sum - center_sum) / (surround_pixels * 255.0)
 
-        self.coded = mean_hues + edge_counts
+                # ON-center: Center (+) - Surround (-)
+                on_center = float(np.clip(mean_center - mean_surround, 0.0, 1.0))
+
+                # OFF-center: Surround (+) - Center (-)
+                off_center = float(np.clip(mean_surround - mean_center, 0.0, 1.0))
+
+                output.extend([on_center, off_center, mean_r, mean_g, mean_b])
+
+        self.coded = np.array(output, dtype=float)

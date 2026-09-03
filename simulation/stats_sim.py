@@ -1,4 +1,4 @@
-### all simulation environment statistics are collected here
+### all simulation environment statistics are collected here OLD
 
 import numpy as np
 import cv2

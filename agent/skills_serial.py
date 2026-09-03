@@ -120,14 +120,21 @@ class ClearThePath(Skill):
         def turn() -> bool:
             frame = self.camera.read()
             distances = self.lidars.read()
-            if distances[0] < distances[7]:
+            distance_left = distances[0]
+            distance_right = distances[7]
+            if (( distances[0] > self.min_dist + tolerance ) and ( distances[7] > self.min_dist + tolerance )):
+                return True
+            if distance_left < distance_right:
                 self.wheels.set_parameters([ - self.velocity, self.velocity])
             else:
                 self.wheels.set_parameters([self.velocity, - self.velocity])
             while time.time() - start_time < self.timeout:
+                frame = self.camera.read()
                 distances = self.lidars.read()
+                # turn until minimal value is on indexes 3 and 4
+                min_idx = np.argmin(distances)
                 clear_path = (( distances[0] > self.min_dist + tolerance ) and ( distances[7] > self.min_dist + tolerance ))
-                if clear_path:
+                if min_idx in [3, 4] and clear_path:
                     return True
             self.wheels.set_parameters([0, 0])
             print(f"[AGENT] {self.__class__.__name__} failed. Timed out. TURN")
@@ -147,6 +154,7 @@ class ClearThePath(Skill):
                 clear_path = (( distances[0] > self.min_dist + tolerance ) and ( distances[7] > self.min_dist + tolerance ))
                 if not clear_path:
                     return True if turn() else False
+            return True
 
 
         # loops:::
@@ -164,6 +172,10 @@ class ClearThePath(Skill):
             self.wheels.set_parameters([0,0])
             print(f"[AGENT] {self.__class__.__name__} finished successfully.")
             return True
+        ## failed somewhere
+        self.wheels.set_parameters([0, 0])
+        print(f"[AGENT] {self.__class__.__name__} failed.")
+        return False
 
 
 class GoToTheColor(Skill):
@@ -275,7 +287,8 @@ class GoToTheColor(Skill):
                 self.wheels.set_parameters([0, 0])
                 # ask supervisor
                 if not self.effects_check():
-                    print(f"[AGENT] {self.__class__.__name__} failed. Effects conditions not met. Teleporting.")
+                    print(f"[AGENT] {self.__class__.__name__} failed. Effects conditions not met.")
+                    return False
                 print(f"[AGENT] {self.__class__.__name__} finished successfully.")
                 return True
 
@@ -320,8 +333,6 @@ class GoToTheDoor(GoToTheColor):
 
     def effects_check(self) -> bool:
         door_zone = self.bus.call_service(f"/supervisor/ask/door_zone")
-        if not door_zone:
-            self.bus.call_service(f"/supervisor/do/door_zone")
         return door_zone
 
 class GoToTheGoal(GoToTheColor):
@@ -379,7 +390,6 @@ class GoThroughTheDoor(Skill):
             front = min(distances[0], distances[7])
             clear_path = front > self.min_dist
             # logic
-            print(f"room: {room} || zone = {zone}")
             if not room == init_room and not zone and clear_path:
                 self.wheels.set_parameters([0.0, 0.0])
                 print(f"[AGENT] {self.__class__.__name__} finished successfully.")

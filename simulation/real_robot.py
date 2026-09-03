@@ -6,7 +6,7 @@ from communicator import Communicator
 
 from .object import Object
 from .real_actuator import WheelsActuator
-from .real_sensor import FinnishSensor, LidarSensor, CameraSensor, RealSensorArray
+from .real_sensor import LidarSensor, CameraSensor, RealSensorArray
 
 class RealRobot(Object):
     def __init__(self, bus: Communicator):

@@ -5,23 +5,17 @@ import pybullet as p
 import pybullet_data
 
 from .object import Object
-from .stats_sim import *
 from communicator import Communicator
 
 class Environment():
     def __init__(self):
         self.objects = None
-        self.stats = None
 
-    def __init__(self, objects: list[Object] = [], stats: list[StatsSim] = []):
+    def __init__(self, objects: list[Object] = []):
         self.objects = objects
-        self.stats = stats
 
     def add_object(self, obj: Object):
         self.objects.append(obj)
-
-    def add_stats(self, stat: StatsSim):
-        self.stats.append(stat)
 
     def setup(self, com: Communicator, time_step: float):
         # Config physics and environment
@@ -42,11 +36,8 @@ class Environment():
             obj.register_services()
 
     def update(self):
-        for stat in self.stats:
-            stat.update()
+        pass
 
     def close(self):
         p.disconnect()
-        for stat in self.stats:
-            stat.close()
 

@@ -17,9 +17,14 @@ class Supervisor():
         
         self.bus.register_service(f"/supervisor/ask/room_number", self.which_room)
         self.bus.register_service(f"/supervisor/ask/door_zone", self.door_zone)
-        self.bus.register_service(f"/supervisor/do/door_zone", self.door_zone_teleport)
         self.bus.register_service(f"/supervisor/ask/goal_zone", self.goal_zone)
 
+    def setup(self):
+        # call from other sources
+        self.robot_id = self.bus.call_service(f"/realrobot/give_id")
+        self.arena_id = self.bus.call_service(f"/arena/give_id")
+
+        
     def smth_callback(self, message):
         '''
         for when data appear in the ether self.bus.subscribe("/supervisor/attend/smth", self.smth_callback)
@@ -68,7 +73,7 @@ class Supervisor():
         door_x = pos_door[0]               # 0
         
         top_width = 0.2    # Width at the doorway
-        bottom_width = 0.6 # Width at the far edge
+        bottom_width = 0.4 # Width at the far edge
         height = 0.5       # Depth the trapezoid extends into the room
         
         y = pos_robot[1]
@@ -96,23 +101,6 @@ class Supervisor():
             
         return False
 
-    def door_zone_teleport(self, request=None):
-
-        # door position (hinge)
-        pos_door = [0, -0.1]
-        coeff = 1 if  self.which_room() == 2 else -1
-        pos_robot = [
-            pos_door[0] + (coeff * 0.1), 
-            pos_door[1], 
-            0.035
-        ]
-        dx = 0.0 - pos_robot[0]
-        dy = 0.0 - pos_robot[1]
-        yaw_angle = math.atan2(dy, dx)
-        orn_robot = p.getQuaternionFromEuler([0, 0, yaw_angle])
-        p.resetBasePositionAndOrientation(self.robot_id, pos_robot, orn_robot)
-        time.sleep(1.0)
-
     def goal_zone(self, request=None):
         # robot position
         position, _ = p.getBasePositionAndOrientation(self.robot_id)
@@ -128,7 +116,7 @@ class Supervisor():
         pos_door = link_state[0] 
 
         # the distance
-        max_dist = 0.1
+        max_dist = 0.25
         x_dist = abs(pos_door[0] - pos_robot[0])
         y_dist = abs(pos_door[1] - pos_robot[1])
         dist = (x_dist**2+y_dist**2)**(1/2)

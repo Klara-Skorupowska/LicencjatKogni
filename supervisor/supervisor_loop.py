@@ -10,11 +10,10 @@ def supervisor_loop(bus: Communicator, setup_complete_event, stop_event: threadi
     # status boards
     # colectiong data
     time_step = 1.0 / 60.0
-    #world.setup(bus, time_step)
-    # robot.set_end_pad_coords(arena.get_end_pad_coords()) useless
-    setup_complete_event.set() 
     god = Supervisor(bus)
+    god.setup()
     print("[SUPERVISOR] Loaded.")
+    setup_complete_event.set() 
     
     try:
         while not stop_event.is_set():
