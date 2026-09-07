@@ -24,7 +24,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="additional_scripts\brain_viewer.py" />
-    <Compile Include="visualizer.py" />
+    <Compile Include="supervisor\visualize.py" />
     <Compile Include="agent\core.py" />
     <Compile Include="agent\agent_loop.py" />
     <Compile Include="agent\brain_network.py" />
@@ -47,7 +47,6 @@
     <Compile Include="simulation\__init__.py" />
     <Compile Include="supervisor\core.py" />
     <Compile Include="supervisor\data_collector.py" />
-    <Compile Include="supervisor\status_board.py" />
     <Compile Include="supervisor\supervisor_loop.py" />
     <Compile Include="supervisor\__init__.py" />
   </ItemGroup>

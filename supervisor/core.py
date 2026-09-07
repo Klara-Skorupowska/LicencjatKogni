@@ -7,7 +7,7 @@ import time
 class Supervisor():
     '''
     supervisor is the omnipotent god: it tells the agent where it is and if the task were successful etc.
-    it collects all the data
+    it collects all the data, it can change the world
     It is yet another thread that uses communicator
     '''
     def __init__(self, bus: Communicator):
@@ -18,6 +18,9 @@ class Supervisor():
         self.bus.register_service(f"/supervisor/ask/room_number", self.which_room)
         self.bus.register_service(f"/supervisor/ask/door_zone", self.door_zone)
         self.bus.register_service(f"/supervisor/ask/goal_zone", self.goal_zone)
+
+        self.bus.register_service(f"/supervisor/do/restart", self.restart)
+        
 
     def setup(self):
         # call from other sources
@@ -110,7 +113,7 @@ class Supervisor():
         joint_name_to_index = self._joint_name_to_index(self.arena_id)
         goal_idx = joint_name_to_index.get("end_joint")
         if goal_idx is None:
-            print("Warning: 'end_joint' not found in URDF.")
+            print("[Supervisor] Warning: 'end_joint' not found in URDF.")
             return None
         link_state = p.getLinkState(self.arena_id, goal_idx)
         pos_door = link_state[0] 
@@ -122,4 +125,12 @@ class Supervisor():
         dist = (x_dist**2+y_dist**2)**(1/2)
 
         return dist < max_dist
+       
+    def restart(self, request=None):
+        print("[Supervisor] Robot in environment reset.")
+        # Reset robot position
+        position, orientation = self.bus.call_service(f"/realrobot/give_initial_position")
+        p.resetBasePositionAndOrientation(self.robot_id, position, orientation)
+        p.resetBaseVelocity(self.robot_id, [0, 0, 0], [0, 0, 0])
+        time.sleep(3.0)
         

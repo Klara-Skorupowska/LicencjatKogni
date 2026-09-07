@@ -7,11 +7,7 @@ from .skills_serial import *
 from .brain_network import *
 
 import cv2
-import numpy as np
-import random
-import os
-import subprocess
-import sys
+
 
 class Agent:
     def __init__(self, communicator: Communicator):
@@ -81,12 +77,12 @@ class SkilledAgent(Agent):
         min_dist = 0.05
         velocity = 15
         self.skillset = {
-            'SpotTheDoor': SpotTheColor(60, self.camera, self.lidars, self.wheels, velocity, min_dist, timeout=5.0),
-            'GoToTheDoor 2.1': GoToTheDoor(bus, 60, self.camera, self.lidars, self.wheels, velocity, min_dist=min_dist, timeout=15.0),
-            'GoThroughTheDoor': GoThroughTheDoor(bus, self.camera, self.lidars, self.wheels, velocity, min_dist, timeout=15.0),
-            'SpotTheGoal': SpotTheColor(120, self.camera, self.lidars, self.wheels, velocity, min_dist, timeout=5.0),
-            'GoToTheGoal 2.1': GoToTheGoal(bus, 120, self.camera, self.lidars, self.wheels, velocity, min_dist=min_dist, timeout=15.0),
-            'ClearThePath': ClearThePath(bus, self.camera, self.lidars, self.wheels, velocity, min_dist=min_dist, run_time=2.0, timeout=15.0),
+            'SpotTheDoor': SpotTheColor(60, self.camera, self.lidars, self.wheels, velocity, min_dist, timeout=3.0),
+            'GoToTheDoor': GoToTheDoor(bus, 60, self.camera, self.lidars, self.wheels, velocity, min_dist=min_dist, timeout=15.0),
+            'GoThroughTheDoor': GoThroughTheDoor(bus, self.camera, self.lidars, self.wheels, velocity, min_dist, timeout=10.0),
+            'SpotTheGoal': SpotTheColor(120, self.camera, self.lidars, self.wheels, velocity, min_dist, timeout=3.0),
+            'GoToTheGoal': GoToTheGoal(bus, 120, self.camera, self.lidars, self.wheels, velocity, min_dist=min_dist, timeout=15.0),
+            #'ClearThePath': ClearThePath(bus, self.camera, self.lidars, self.wheels, velocity, min_dist=min_dist, run_time=2.0, timeout=15.0),
         }
         
     def read_state(self):
@@ -102,8 +98,9 @@ class SkilledAgent(Agent):
         return duck
 
     def run(self):
-        self.skillset["ClearThePath"].execute()
+        i = 0
         while True:
+            i+=1
             duck = self.read_state()
             if duck:
                 print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> Oh noo, tha wall...")
@@ -113,4 +110,5 @@ class SkilledAgent(Agent):
                 if not skl.execute():
                     print(f" {name} failed.")
                     time.sleep(1.0)
-            
+            if i > 4:
+                break

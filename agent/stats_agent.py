@@ -40,7 +40,7 @@ class NetworkLogger(StatsAgent):
         """
         Saves the final raw NetworkX graph data.
         """
-        print("\n[Statistics] Closing NetworkLogger... Saving final data.")
+        print("\n[Statistics] Closing NetworkLogger. Saving final data.")
         final_path = f"{self.save_path}/transgraph_final.graphml"
         try:
             nx.write_graphml(self.brain.transitional_map, final_path)

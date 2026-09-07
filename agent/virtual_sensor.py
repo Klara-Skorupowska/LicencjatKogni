@@ -31,6 +31,12 @@ class LidarSensor(VirtualSensor):
         self.lidar_direction = lidar_direction
         self.value = None
 
+        self.bus.register_service(f"/lidar/{lidar_direction}/ask/value", self.send_value)
+
+    def send_value(self, request=None):
+        self.read()
+        return self.value
+
     def read(self):
         self.value = self.bus.call_service(f"/sensor/lidar_{self.lidar_direction}/sense")
         return self.value
@@ -43,6 +49,14 @@ class CameraSensor(VirtualSensor):
         super().__init__(bus)
         self.frame = None 
         self.coded = None 
+        
+        self.bus.register_service(f"/camera/ask/coded", self.send_coded)
+
+    def send_coded(self, request=None):
+        self.read()
+        self.preprocess()
+        return self.coded
+
 
     def read(self):
         self.frame = self.bus.call_service("/sensor/camera/sense")
@@ -65,18 +79,20 @@ class CameraSensor(VirtualSensor):
 
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         
-        # Grid dimensions: 6 rows, 8 columns of 20x20 blocks
-        patch_size = 20
-        rows = 120 // patch_size  # 6
-        cols = 160 // patch_size  # 8
+        # Grid dimensions:
+        patch_size = 16
+        rows = 120 // patch_size  
+        cols = 160 // patch_size  
 
-        # Core size for 20x20 receptive field (10x10 core)
-        core_s = patch_size // 2
+        # Core size for receptive field: halve
+        core_s = patch_size // 3
         core_offset = (patch_size - core_s) // 2
         surround_pixels = (patch_size * patch_size) - (core_s * core_s)
+        # --- Dynamic Threshold Parameters (Weber's Law) ---
+        base_threshold = 0.1   # Minimum contrast needed in absolute darkness to fire
+        alpha = 0.15           # Sensitivity scaler: higher means it ignores more noise in bright light
 
         output = []
-
         for r in range(rows):
             for c in range(cols):
                 y = r * patch_size
@@ -91,6 +107,7 @@ class CameraSensor(VirtualSensor):
                 mean_r = np.mean(bgr_roi[:, :, 2]) / 255.0
 
                 # Center patch (10x10) and surround calculation
+
                 center_patch = gray_roi[core_offset:core_offset + core_s, core_offset:core_offset + core_s]
                 mean_center = np.mean(center_patch) / 255.0
 
@@ -98,11 +115,14 @@ class CameraSensor(VirtualSensor):
                 center_sum = np.sum(center_patch)
                 mean_surround = (total_sum - center_sum) / (surround_pixels * 255.0)
 
+                # when the cell fires Local Contrast (Weber's Law)
+                threshold = max(base_threshold, alpha * (mean_center + mean_surround))
+
                 # ON-center: Center (+) - Surround (-)
-                on_center = float(np.clip(mean_center - mean_surround, 0.0, 1.0))
+                on_center = True if float(np.clip(mean_center - mean_surround, 0.0, 1.0)) > threshold else False
 
                 # OFF-center: Surround (+) - Center (-)
-                off_center = float(np.clip(mean_surround - mean_center, 0.0, 1.0))
+                off_center = True if float(np.clip(mean_surround - mean_center, 0.0, 1.0)) > threshold else False
 
                 output.extend([on_center, off_center, mean_r, mean_g, mean_b])
 

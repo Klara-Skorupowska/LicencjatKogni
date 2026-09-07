@@ -81,6 +81,7 @@ class CameraSensor(RealSensor):
 
         img_data = p.getCameraImage(
             self.width, self.height, view_matrix, self.projection_matrix, 
+            shadow=1, # with shadows
             renderer=p.ER_TINY_RENDERER # or p.ER_BULLET_HARDWARE_OPENGL for speed
         )
         

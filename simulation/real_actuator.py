@@ -48,6 +48,10 @@ class WheelsActuator(RealActuator):
         self.right_wheel_velocity = 0.0
 
         self.bus.subscribe("/cmd/wheels", self.wheels_callback)
+        self.bus.register_service("/get/wheels/max_velocity", self.send_max_velocity)
+
+    def send_max_velocity(self, request = None):
+        return self.max_velocity
 
     def set_robot_id(self, id):
         self.robot_id = id

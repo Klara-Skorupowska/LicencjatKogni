@@ -33,6 +33,7 @@ class RealRobot(Object):
     
     def register_services(self):
         self.bus.register_service(f"/realrobot/give_id", self.give_id)
+        self.bus.register_service(f"/realrobot/give_initial_position", self.give_initial_position)
 
     def setup(self):
         # camera setup
@@ -46,3 +47,6 @@ class RealRobot(Object):
         name2idx =  self._joint_name_to_index()
         self.sensors["camera"].link_index =name2idx.get("camera_joint")
         pass
+
+    def give_initial_position(self, request=None):
+        return self.initial_position, self.initial_orientation

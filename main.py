@@ -9,12 +9,11 @@ from simulation import *
 from agent import *
 from supervisor import *
 from communicator import Communicator
-from visualizer import PipelineVisualizer
 
 
 # --- let's go ---
 def main():
-    print("Starting...")
+    print("Starting")
     print("Open communication")
     bus = Communicator()
     ### ---- CHOOSE PARAMETERS HERE ---- ###
@@ -46,10 +45,6 @@ def main():
     agent_thread.join()
     physics_thread.join()
     supervisor_thread.join()
-
-    # pictures
-    runner = PipelineVisualizer(logs_root="logs")
-    runner.run_all()
 
     print("All threads closed cleanly. Exiting program.")
 

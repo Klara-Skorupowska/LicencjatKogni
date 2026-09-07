@@ -54,7 +54,7 @@ class StatusBoard(StatsSim, QWidget):
         # HUD / Text Panel
         self.hud_group = QGroupBox("Telemetry")
         hud_layout = QVBoxLayout()
-        self.text_label = QLabel("Waiting for data...")
+        self.text_label = QLabel("Waiting for data")
         self.text_label.setWordWrap(True) 
         self.text_label.setStyleSheet("font-family: monospace; font-size: 12pt;")
         hud_layout.addWidget(self.text_label)

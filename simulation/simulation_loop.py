@@ -9,13 +9,13 @@ import threading
 
 def simulation_loop(bus: Communicator, setup_complete_event, robot: RealRobot, arena: Arena, stop_event: threading.Event, objects:list[Object]=[]):
     """Runs continuously at 240Hz, completely independent of the agent."""
-    print("[Physics] Starting world clock...")
-    print("Loading environment...")
+    print("[Simulation] Starting world clock")
+    print("[Simulation] Loading environment")
     world = Environment([robot, arena] + objects)
     time_step = 1.0 / 240.0
     world.setup(bus, time_step)
     setup_complete_event.set()
-    print("Environment loaded.")
+    print("[Simulation] Environment loaded.")
     
     try:
         while not stop_event.is_set():
@@ -23,7 +23,7 @@ def simulation_loop(bus: Communicator, setup_complete_event, robot: RealRobot, a
             time.sleep(time_step)
 
     except KeyboardInterrupt:
-        print("Simulation stopped by user.")
+        print("[Simulation] Simulation stopped by user.")
     finally:
         world.close()
-        print("[Physics] World closed safely.")
+        print("[Simulation] World closed safely.")
