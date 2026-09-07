@@ -77,7 +77,7 @@ class TheAgent(Agent):
                     f.write(f"{sk_name:<25} | {counts['success']:<10} | {counts['fail']:<10} | {sumall:<10}\n")
                 else:
                     counts['fail'] = self.run_count - counts['success']
-                    f.write(f"{sk_name:<25} | {counts['success']:<10} | {counts['fail']:<10} | {self.run_count:<10} // one per run\n") # math not mathing
+                    f.write(f"{sk_name:<25} | {counts['success']:<10} | {000:<10} | {self.run_count:<10} // one per run\n") # math not mathing
 
         pass
     def run(self):
