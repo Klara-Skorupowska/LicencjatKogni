@@ -13,23 +13,33 @@ class VirtualSensor():
     def read(self): # from the bus
         raise NotImplementedError("The read() method must be implemented in the subclass.")
 
+    def preprocess(self):
+        raise NotImplementedError("The preprocess() method must be implemented in the subclass.")
+
 class VirtualSensorArray(VirtualSensor):
     def __init__(self, bus: Communicator, sensors: list[VirtualSensor]):
         super().__init__(bus)
         self.sensors = sensors
         self.value = []
+        self.coded = []
+
     def read(self):
         self.value = [sensor.read() for sensor in self.sensors]
         return self.value
 
+    def preprocess(self):
+        self.coded = [sensor.preprocess() for sensor in self.sensors]
+
 class LidarSensor(VirtualSensor):
-    def __init__(self, bus: Communicator, lidar_direction):
+    def __init__(self, bus: Communicator, lidar_direction, max_range=0.1):
         '''
         lidar_direction: - in degrees, 0 is forward, 90 is left, 180 is backward, 270 is right
         '''
         super().__init__(bus)
         self.lidar_direction = lidar_direction
+        self.max_range = max_range
         self.value = None
+        self.coded = None
 
         self.bus.register_service(f"/lidar/{lidar_direction}/ask/value", self.send_value)
 
@@ -40,6 +50,14 @@ class LidarSensor(VirtualSensor):
     def read(self):
         self.value = self.bus.call_service(f"/sensor/lidar_{self.lidar_direction}/sense")
         return self.value
+
+    def preprocess(self):
+        """
+        scale the value into 0-1
+        """
+        if  self.value is not None and self.max_range > 0:
+            self.coded = self.value/self.max_range
+        return self.coded
 
 class CameraSensor(VirtualSensor):
     def __init__(self, bus: Communicator):
@@ -64,7 +82,7 @@ class CameraSensor(VirtualSensor):
 
     def preprocess(self):
         '''
-        Processes a uniform grid of 20x20 receptive fields (6 rows x 8 cols = 48 fields).
+        Processes a uniform grid of receptive fields.
         Returns a flat array containing [ON-center, OFF-center, Mean R, Mean G, Mean B] per field.
         '''
         if self.frame is None:
@@ -119,11 +137,14 @@ class CameraSensor(VirtualSensor):
                 threshold = max(base_threshold, alpha * (mean_center + mean_surround))
 
                 # ON-center: Center (+) - Surround (-)
-                on_center = True if float(np.clip(mean_center - mean_surround, 0.0, 1.0)) > threshold else False
+                on_val = float(np.clip(mean_center - mean_surround, 0.0, 1.0))
+                on_center = 1.0 if on_val > threshold else 0.0
 
                 # OFF-center: Surround (+) - Center (-)
-                off_center = True if float(np.clip(mean_surround - mean_center, 0.0, 1.0)) > threshold else False
+                off_val = float(np.clip(mean_surround - mean_center, 0.0, 1.0))
+                off_center = 1.0 if off_val > threshold else 0.0
 
                 output.extend([on_center, off_center, mean_r, mean_g, mean_b])
 
         self.coded = np.array(output, dtype=float)
+        return self.coded

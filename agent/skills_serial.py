@@ -14,8 +14,37 @@ import numpy as np
 # 3) go through the door
 # 4) spot the finish pad
 # 5) go to the finish pad
+# 6) finnish
 
-class SpotTheColor(Skill):
+class SerialSkill(Skill):
+    '''
+    mother class for all skills executed in order,
+    contains all sensors, helper with reading them, and basic initialization
+    '''
+    def __init__(
+        self,
+        camera: CameraSensor,
+        lidars: VirtualSensorArray,
+        wheels: WheelsActuator,
+        velocity: float,
+        save_dist: float,
+        timeout: float = 5.0,
+    ):
+        super().__init__()
+
+        self.camera = camera
+        self.lidars = lidars
+        self.wheels = wheels
+        self.velocity = velocity
+        self.save_dist = save_dist
+        self.timeout = timeout
+
+    def read_sensors(self):
+        frame = self.camera.read()
+        distances = self.lidars.read()
+        return frame, distances
+
+class SpotTheColor(SerialSkill):
     """
     Turns around until it sees the <color> object, centers it,
     and returns True. Fails if an obstacle is too close or timeout is reached.
@@ -28,23 +57,17 @@ class SpotTheColor(Skill):
         lidars: VirtualSensorArray,
         wheels: WheelsActuator,
         velocity: float,
-        min_dist: float,
-        timeout: float = 10.0,
+        save_dist: float,
+        timeout: float = 5.0,
     ):
-        super().__init__()
+        super().__init__(camera, lidars, wheels, velocity, save_dist, timeout)
         assert 0 <= hue <= 179, f"Hue {hue} out of bounds (0-179)"
 
         self.hue = hue
-        self.camera = camera
-        self.lidars = lidars
-        self.wheels = wheels
-        self.velocity = velocity
-        self.min_dist = min_dist
-        self.timeout = timeout
 
     def execute(self) -> bool:
         class_name = self.__class__.__name__
-        print(f"[Agent] Executing {class_name} skill. Hue: {self.hue}.")
+        print(f"\t[Skill] Executing {class_name} skill. Hue: {self.hue}.")
 
         hue_tol = 25
         lower_hue = (self.hue - hue_tol)%180
@@ -55,15 +78,14 @@ class SpotTheColor(Skill):
             higher_hue = temp
         lower_HSV = np.array([lower_hue, 50, 50])
         upper_HSV = np.array([higher_hue, 255, 255])
-        distances = self.lidars.read()
+        _, distances = self.read_sensors()
         to_the_left = distances[0] < distances[7]
 
         start_time = time.time()
         while time.time() - start_time < self.timeout:
 
             # 1. Camera Snapshot & HSV Detection
-            frame = self.camera.read()
-            distances = self.lidars.read()
+            frame, distances = self.read_sensors()
             if frame is None:
                 continue
 
@@ -78,7 +100,7 @@ class SpotTheColor(Skill):
                 color_center_x = moments["m10"]//moments["m00"]
                 if (to_the_left and  color_center_x > frame_center_x) or (not to_the_left and color_center_x < frame_center_x):
                     self.wheels.set_parameters([0.0, 0.0])
-                    print(f"[Agent] {self.__class__.__name__} finished successfully.")
+                    print(f"\t[Skill] {self.__class__.__name__} finished successfully.")
                     return True
             # Not found nor centered: continue searching by rotating
             if to_the_left:
@@ -90,10 +112,10 @@ class SpotTheColor(Skill):
 
         # Timeout reached
         self.wheels.set_parameters([0.0, 0.0])
-        print(f"[Agent] {class_name} failed. Timed out.")
+        print(f"\t[Skill] {class_name} failed. Timed out.")
         return False
 
-class ClearThePath(Skill):
+class ClearThePath(SerialSkill):
     '''
     Clears the path in front by turning and running away.
     '''
@@ -104,46 +126,37 @@ class ClearThePath(Skill):
         lidars, 
         wheels, 
         velocity: float, 
-        min_dist: float,
+        save_dist: float,
         run_time: float,
         timeout: float = 15.0
     ):
-        super().__init__()
+        super().__init__(camera, lidars, wheels, velocity, save_dist, timeout)
         self.bus = bus
-        self.camera = camera 
-        self.lidars = lidars
-        self.wheels = wheels
-        self.velocity = velocity
-        self.min_dist = min_dist
-        self.run_time = run_time
-        self.timeout = timeout
 
     def execute(self) -> bool:
-        print(f"[Agent] Executing {self.__class__.__name__} skill.")
+        print(f"\t[Skill] Executing {self.__class__.__name__} skill.")
         start_time = time.time()
         tolerance = 0.005
         # helpers
         def turn() -> bool:
-            self.camera.read()
-            distances = self.lidars.read()
+            _, distances = self.read_sensors()
             distance_left = distances[0]
             distance_right = distances[7]
-            if (( distances[0] > self.min_dist + tolerance ) and ( distances[7] > self.min_dist + tolerance )):
+            if (( distances[0] > self.save_dist + tolerance ) and ( distances[7] > self.save_dist + tolerance )):
                 return True
             if distance_left < distance_right:
                 self.wheels.set_parameters([ - self.velocity, self.velocity])
             else:
                 self.wheels.set_parameters([self.velocity, - self.velocity])
             while time.time() - start_time < self.timeout:
-                self.camera.read()
-                distances = self.lidars.read()
+                _, distances = self.read_sensors()
                 # turn until minimal value is on indexes 3 and 4
                 min_idx = np.argmin(distances)
-                clear_path = (( distances[0] > self.min_dist + tolerance ) and ( distances[7] > self.min_dist + tolerance ))
+                clear_path = (( distances[0] > self.save_dist + tolerance ) and ( distances[7] > self.save_dist + tolerance ))
                 if min_idx in [3, 4] and clear_path:
                     return True
             self.wheels.set_parameters([0, 0])
-            print(f"[Agent] {self.__class__.__name__} failed. Timed out. TURN")
+            print(f"\t[Skill] {self.__class__.__name__} failed. Timed out. TURN")
             return False
 
         def move() -> bool:
@@ -151,13 +164,12 @@ class ClearThePath(Skill):
             self.wheels.set_parameters([self.velocity, self.velocity])
             while time.time() - start_run < self.run_time:
                 # sensors
-                self.camera.read()
-                distances = self.lidars.read()
+                _, distances = self.read_sensors()
                 if time.time() - start_time > self.timeout:
                     self.wheels.set_parameters([0, 0])
-                    print(f"[Agent] {self.__class__.__name__} failed. Timed out. MOVE")
+                    print(f"\t[Skill] {self.__class__.__name__} failed. Timed out. MOVE")
                     return False
-                clear_path = (( distances[0] > self.min_dist + tolerance ) and ( distances[7] > self.min_dist + tolerance ))
+                clear_path = (( distances[0] > self.save_dist + tolerance ) and ( distances[7] > self.save_dist + tolerance ))
                 if not clear_path:
                     return True if turn() else False
             return True
@@ -165,25 +177,24 @@ class ClearThePath(Skill):
 
         # loops:::
         # sensors
-        self.camera.read()
-        distances = self.lidars.read()
+        _, distances = self.read_sensors()
         # calculations
         ## all obstacles = bad
-        if max(distances) < self.min_dist + tolerance:
+        if max(distances) < self.save_dist + tolerance:
             self.wheels.set_parameters([0, 0])
-            print(f"[Agent] {self.__class__.__name__} failed. Nowhere to run.")
+            print(f"\t[Skill] {self.__class__.__name__} failed. Nowhere to run.")
             return False
         ## find clear path:
         if turn() and move():
             self.wheels.set_parameters([0,0])
-            print(f"[Agent] {self.__class__.__name__} finished successfully.")
+            print(f"\t[Skill] {self.__class__.__name__} finished successfully.")
             return True
         ## failed somewhere
         self.wheels.set_parameters([0, 0])
-        print(f"[Agent] {self.__class__.__name__} failed.")
+        print(f"\t[Skill] {self.__class__.__name__} failed.")
         return False
 
-class GoToTheColor(Skill):
+class GoToTheColor(SerialSkill):
     '''
     Approaches a specific colored object by Hue.
     '''
@@ -195,22 +206,16 @@ class GoToTheColor(Skill):
         lidars, 
         wheels, 
         velocity: float, 
-        min_dist: float, 
+        save_dist: float, 
         target_distance: float = 0.06,
         distance_tolerance: float = 0.01,
         timeout: float = 15.0
     ):
-        super().__init__()
+        super().__init__(camera, lidars, wheels, velocity, save_dist, timeout)
         self.bus = bus
         self.hue = hue
-        self.camera = camera 
-        self.lidars = lidars
-        self.wheels = wheels
-        self.velocity = velocity
-        self.min_dist = min_dist
         self.target_distance = target_distance
         self.distance_tolerance = distance_tolerance
-        self.timeout = timeout
         self.center_tolerance = 10
         self.hue_tolerance = 25
 
@@ -247,30 +252,28 @@ class GoToTheColor(Skill):
         raise NotImplementedError(f"{self.__class__.__name__} needs checks implementations. No effects_check")
 
     def execute(self) -> bool:
-        print(f"[Agent] Executing {self.__class__.__name__} skill. Hue: {self.hue}.")
+        print(f"\t[Skill] Executing {self.__class__.__name__} skill. Hue: {self.hue}.")
         start_time = time.time()
         # read sensors
-        frame = self.camera.read()
-        distances = self.lidars.read()
+        frame, distances = self.read_sensors()
         if frame is None: 
             return False
         # ask supervisor
         if not self.conditions_check():
             self.wheels.set_parameters([0, 0])
-            print(f"[Agent] {self.__class__.__name__} failed. Starting conditions not met.")
+            print(f"\t[Skill] {self.__class__.__name__} failed. Starting conditions not met.")
             return False
         # make calculations
         image_center = frame.shape[1] / 2
         color_center = self._get_color_x_center(frame)
         if color_center is None:
             self.wheels.set_parameters([0, 0])
-            print(f"[Agent] {self.__class__.__name__} failed. No target color in sight.")
+            print(f"\t[Skill] {self.__class__.__name__} failed. No target color in sight.")
             return False
         # loop
         while time.time() - start_time < self.timeout:
             # read sensors
-            frame = self.camera.read()
-            distances = self.lidars.read()
+            frame, distances = self.read_sensors()
             if frame is None: 
                 continue
             # make calculations
@@ -278,7 +281,7 @@ class GoToTheColor(Skill):
             color_center = self._get_color_x_center(frame)
             if color_center is None:
                 self.wheels.set_parameters([0, 0])
-                print(f"[Agent] {self.__class__.__name__} failed. No target color in sight.")
+                print(f"\t[Skill] {self.__class__.__name__} failed. No target color in sight.")
                 return False
             front_dist = min(distances[0], distances[7])
 
@@ -292,16 +295,16 @@ class GoToTheColor(Skill):
                 self.wheels.set_parameters([0, 0])
                 # ask supervisor
                 if not self.effects_check():
-                    print(f"[Agent] {self.__class__.__name__} failed. Effects conditions not met.")
+                    print(f"\t[Skill] {self.__class__.__name__} failed. Effects conditions not met.")
                     return False
-                print(f"[Agent] {self.__class__.__name__} finished successfully.")
+                print(f"\t[Skill] {self.__class__.__name__} finished successfully.")
                 return True
 
             # check if we can move freely
-            clear_path = ( distances[0] >= self.min_dist and distances[7] >= self.min_dist )
+            clear_path = ( distances[0] >= self.save_dist and distances[7] >= self.save_dist )
             if not clear_path:
                 self.wheels.set_parameters([0, 0])
-                print(f"[Agent] {self.__class__.__name__} failed. Obstacle ahead.")
+                print(f"\t[Skill] {self.__class__.__name__} failed. Obstacle ahead.")
                 return False
 
             # 2 bools so 4 cases but 2 actions
@@ -329,7 +332,7 @@ class GoToTheColor(Skill):
 
 
         self.wheels.set_parameters([0, 0])
-        print(f"[Agent] {self.__class__.__name__} failed. Timed out.")
+        print(f"\t[Skill] {self.__class__.__name__} failed. Timed out.")
         return False
 
 class GoToTheDoor(GoToTheColor):
@@ -349,7 +352,7 @@ class GoToTheGoal(GoToTheColor):
     def effects_check(self) -> bool:
         return self.bus.call_service(f"/supervisor/ask/goal_zone")
 
-class GoThroughTheDoor(Skill):
+class GoThroughTheDoor(SerialSkill):
     '''
     Opens door, any color.
     '''
@@ -360,25 +363,18 @@ class GoThroughTheDoor(Skill):
         lidars: VirtualSensorArray, 
         wheels: VirtualActuator, 
         velocity: float, 
-        min_dist: float,
+        save_dist: float,
         timeout: float = 15.0
     ):
-        super().__init__()
+        super().__init__(camera, lidars, wheels, velocity, save_dist, timeout)
         self.bus = bus
-        self.camera = camera 
-        self.lidars = lidars
-        self.wheels = wheels
-        self.velocity = velocity
-        self.min_dist = min_dist
-        self.timeout = timeout
-        self.start_time = None
 
     def execute(self)-> bool:
-        print(f"[Agent] Executing {self.__class__.__name__} skill")
+        print(f"\t[Skill] Executing {self.__class__.__name__} skill")
         # Ask supervisor if we can start:
         if not self.bus.call_service(f"/supervisor/ask/door_zone"):
             self.wheels.set_parameters([0, 0])
-            print(f"[Agent] {self.__class__.__name__} failed. Not in the door zone.")
+            print(f"\t[Skill] {self.__class__.__name__} failed. Not in the door zone.")
             return False
         init_room = self.bus.call_service(f"/supervisor/ask/room_number")
 
@@ -387,51 +383,44 @@ class GoThroughTheDoor(Skill):
         start_time = time.time()
         while time.time() - start_time < self.timeout:
             # sensors
-            distances = self.lidars.read()
-            self.camera.read()
+            _, distances = self.read_sensors()
             room = self.bus.call_service(f"/supervisor/ask/room_number")
             zone = self.bus.call_service(f"/supervisor/ask/door_zone")
             # calculations
             front = min(distances[0], distances[1], distances[6], distances[7])
-            clear_path = front > self.min_dist
+            clear_path = front > self.save_dist
             # logic
             if not room == init_room and not zone and clear_path:
                 self.wheels.set_parameters([0.0, 0.0])
-                print(f"[Agent] {self.__class__.__name__} finished successfully.")
+                print(f"\t[Skill] {self.__class__.__name__} finished successfully.")
                 return True 
             time.sleep(0.05)
             
         # failed, back up or turn
         def backup()-> bool:
-            distances = self.lidars.read()
-            self.camera.read()
+            _, distances = self.read_sensors()
             front = min(distances[0], distances[1], distances[6], distances[7])
-            clear_path = front > self.min_dist
+            clear_path = front > self.save_dist
             self.wheels.set_parameters([-self.velocity, -self.velocity])
             while not clear_path:
-                # sensors (!!!)
-                distances = self.lidars.read()
-                self.camera.read()
+                _, distances = self.read_sensors() # sensors (!!!)
                 front = min(distances[0], distances[1], distances[6], distances[7])
-                clear_path = front > self.min_dist
+                clear_path = front > self.save_dist
                 if time.time() - start_time > 1.5 * self.timeout:
                     return False
                 return True
         def turn()-> bool:
-            distances = self.lidars.read()
-            self.camera.read()
+            _, distances = self.read_sensors()
             front = min(distances[0], distances[1], distances[6], distances[7])
-            clear_path = front > self.min_dist
+            clear_path = front > self.save_dist
             if distances[0] < distances[7]:
                 self.wheels.set_parameters([self.velocity, -self.velocity])
             else:
                 self.wheels.set_parameters([-self.velocity, self.velocity])
             while not clear_path:
-                # sensors (!!!)
-                distances = self.lidars.read()
-                self.camera.read()
+                _, distances = self.read_sensors()
                 front = min(distances[0], distances[1], distances[6], distances[7])
-                clear_path = front > self.min_dist
+                clear_path = front > self.save_dist
                 if time.time() - start_time > 1.5 * self.timeout:
                     return False
             return True
@@ -442,6 +431,67 @@ class GoThroughTheDoor(Skill):
                 return False
         
         self.wheels.set_parameters([0.0, 0.0])
-        print(f"[Agent] {self.__class__.__name__} failed. Timed out.")
+        print(f"\t[Skill] {self.__class__.__name__} failed. Timed out.")
         return False 
 
+class Finnish(SerialSkill):
+    '''
+    Checks if it is at goal zone and facing the goal then teleports agent back (restart)
+    '''
+    def __init__(
+        self,
+        bus: Communicator,
+        hue: int,
+        camera: CameraSensor, 
+        lidars: VirtualSensorArray, 
+        wheels: VirtualActuator, 
+        velocity: float, 
+        save_dist: float,
+        timeout: float = 15.0
+    ):
+        super().__init__(camera, lidars, wheels, velocity, save_dist, timeout)
+        self.bus = bus
+        self.hue = hue
+
+    def execute(self):
+        print(f"\t[Skill] Executing {self.__class__.__name__} skill.")
+        in_goal_zone = self.bus.call_service("/supervisor/ask/goal_zone")
+        facing_goal = False
+        hue_tol = 25
+        lower_hue = (self.hue - hue_tol)%180
+        higher_hue = (self.hue + hue_tol)%180
+        if lower_hue > higher_hue:
+            temp = lower_hue
+            lower_hue = higher_hue
+            higher_hue = temp
+        lower_HSV = np.array([lower_hue, 50, 50])
+        upper_HSV = np.array([higher_hue, 255, 255])
+
+        frame, _ = self.read_sensors()
+        if frame is None:
+            return False
+
+        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        mask = cv2.inRange(hsv, lower_HSV, upper_HSV)
+
+        moments = cv2.moments(mask)
+        frame_center_x = frame.shape[1] // 2
+        center_tolerance = frame.shape[1]//10 # 10%
+
+        if moments["m00"] > 100:  # filtering noise
+            color_center_x = moments["m10"]//moments["m00"]
+            if abs(color_center_x - frame_center_x) < center_tolerance:
+                facing_goal = True
+
+        if in_goal_zone and facing_goal:
+            print(f"\t[Skill] {self.__class__.__name__} succeed. Restart.")
+            self.bus.call_service("/supervisor/do/restart")
+            return True
+        
+        mssg = ""
+        if not in_goal_zone:
+            mssg += " Not in the goal zone."
+        if not facing_goal:
+            mssg += " Not facing the goal."
+        print(f"\t[Skill] {self.__class__.__name__} failed.{mssg}")
+        return False

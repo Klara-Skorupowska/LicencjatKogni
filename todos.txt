@@ -10,9 +10,17 @@
 ()  - zrobione, a nie było planowane
 ---------------------------------------
 ---------------------------------------
-## 05.09.2026 ###
-[] ._. start time: 05%09%2026 13%46%33 | end time: 05%09%2026 13%47%55 | duration: 00%01%22
-[] tworzenie przejść
+
+### 07.09.2026 ###
+[] do obrazków dodać GNG plane
+[] generowanie PDDL
+
+### 06.09.2026 ###
+[o] włożyć GNG do środka!!!
+
+### 05.09.2026 ###
+[o] ._. start time: 05%09%2026 13%46%33 | end time: 05%09%2026 13%47%55 | duration: 00%01%22
+[o] tworzenie przejść
 
 
 ### 04.09.2026 ###
