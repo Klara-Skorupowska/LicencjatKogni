@@ -27,7 +27,7 @@ class TheAgent(Agent):
         self.lidars = VirtualSensorArray(self.bus, [LidarSensor(self.bus, ang) for ang in [17, 50, 90, 150, 210, 270, 310, 343]])
         self.camera = CameraSensor(self.bus)
         
-        self.max_runs = 1000 # ~ how many explore actions we agreed on
+        self.max_runs = 100 # ~ how many explore actions we agreed on
 
         self.fail_buffor = []
         self.buffor_max_len = 10 
@@ -59,7 +59,7 @@ class TheAgent(Agent):
         self.start_time = None
         self.end_time = None
         self.run_count = 0
-        self.update_count = 0
+        self.update_timestamps = []
 
     def _logger(self, run):
         if not self.stats_path: return
@@ -74,14 +74,13 @@ class TheAgent(Agent):
             duration_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
                 
             f.write(f"start time: {start_str} | end time: {end_str} | duration: {duration_str}\n")
-            f.write(f"run: {run}; brain updates: {self.update_count}\n")
+            f.write(f"run: {run}; brain updates: {len(self.update_timestamps)}\n")
             f.write(f"{'Skill Name':<25} | {'Successes':<10} | {'Fails':<10}\n")
             f.write("-" * 55 + "\n")
             for sk_name, counts in self.skill_stats.items():
                 sumall = counts['success'] + counts['fail']
                 f.write(f"{sk_name:<25} | {counts['success']:<10} | {counts['fail']:<10} | {sumall:<10}\n")
-
-        pass
+            # todo: update timestamps
 
     def run(self):
         try:
@@ -175,7 +174,7 @@ class TheAgent(Agent):
     def add_to_buffor(self, data):
         if len(self.fail_buffor) >= self.buffor_max_len:
             self.brain.update(self.fail_buffor)
-            self.update_count += 1
+            self.update_timestamps += [time.time()]
             self.fail_buffor = []
         self.fail_buffor.append(data)
 

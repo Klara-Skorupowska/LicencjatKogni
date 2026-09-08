@@ -1,0 +1,97 @@
+<?xml version='1.0' encoding='utf-8'?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
+  <key id="d3" for="edge" attr.name="weight" attr.type="long" />
+  <key id="d2" for="edge" attr.name="skill" attr.type="string" />
+  <key id="d1" for="node" attr.name="is_goal" attr.type="string" />
+  <key id="d0" for="node" attr.name="aliases" attr.type="string" />
+  <graph edgedefault="directed">
+    <node id="1">
+      <data key="d0">[1]</data>
+      <data key="d1">True</data>
+    </node>
+    <node id="20_28_56_67_79_90_95">
+      <data key="d0">[20, 28, 56, 67, 79, 90, 95]</data>
+      <data key="d1">True</data>
+    </node>
+    <node id="39">
+      <data key="d0">[39]</data>
+      <data key="d1">False</data>
+    </node>
+    <node id="66">
+      <data key="d0">[66]</data>
+      <data key="d1">False</data>
+    </node>
+    <node id="44">
+      <data key="d0">[44]</data>
+      <data key="d1">False</data>
+    </node>
+    <edge source="1" target="1" id="SpotTheDoor">
+      <data key="d2">SpotTheDoor</data>
+      <data key="d3">3</data>
+    </edge>
+    <edge source="1" target="1" id="GoToTheDoor">
+      <data key="d2">GoToTheDoor</data>
+      <data key="d3">1</data>
+    </edge>
+    <edge source="1" target="1" id="GoThroughTheDoor">
+      <data key="d2">GoThroughTheDoor</data>
+      <data key="d3">1</data>
+    </edge>
+    <edge source="1" target="1" id="SpotTheGoal">
+      <data key="d2">SpotTheGoal</data>
+      <data key="d3">3</data>
+    </edge>
+    <edge source="1" target="1" id="GoToTheGoal">
+      <data key="d2">GoToTheGoal</data>
+      <data key="d3">1</data>
+    </edge>
+    <edge source="1" target="20_28_56_67_79_90_95" id="SpotTheDoor">
+      <data key="d2">SpotTheDoor</data>
+      <data key="d3">1</data>
+    </edge>
+    <edge source="20_28_56_67_79_90_95" target="20_28_56_67_79_90_95" id="SpotTheDoor">
+      <data key="d2">SpotTheDoor</data>
+      <data key="d3">32</data>
+    </edge>
+    <edge source="20_28_56_67_79_90_95" target="20_28_56_67_79_90_95" id="GoToTheDoor">
+      <data key="d2">GoToTheDoor</data>
+      <data key="d3">7</data>
+    </edge>
+    <edge source="20_28_56_67_79_90_95" target="20_28_56_67_79_90_95" id="GoThroughTheDoor">
+      <data key="d2">GoThroughTheDoor</data>
+      <data key="d3">1</data>
+    </edge>
+    <edge source="20_28_56_67_79_90_95" target="20_28_56_67_79_90_95" id="SpotTheGoal">
+      <data key="d2">SpotTheGoal</data>
+      <data key="d3">1</data>
+    </edge>
+    <edge source="20_28_56_67_79_90_95" target="1" id="GoToTheGoal">
+      <data key="d2">GoToTheGoal</data>
+      <data key="d3">1</data>
+    </edge>
+    <edge source="20_28_56_67_79_90_95" target="44" id="GoToTheDoor">
+      <data key="d2">GoToTheDoor</data>
+      <data key="d3">3</data>
+    </edge>
+    <edge source="39" target="20_28_56_67_79_90_95" id="SpotTheDoor">
+      <data key="d2">SpotTheDoor</data>
+      <data key="d3">2</data>
+    </edge>
+    <edge source="66" target="20_28_56_67_79_90_95" id="SpotTheDoor">
+      <data key="d2">SpotTheDoor</data>
+      <data key="d3">3</data>
+    </edge>
+    <edge source="44" target="44" id="SpotTheDoor">
+      <data key="d2">SpotTheDoor</data>
+      <data key="d3">1</data>
+    </edge>
+    <edge source="44" target="44" id="GoToTheDoor">
+      <data key="d2">GoToTheDoor</data>
+      <data key="d3">1</data>
+    </edge>
+    <edge source="44" target="20_28_56_67_79_90_95" id="SpotTheDoor">
+      <data key="d2">SpotTheDoor</data>
+      <data key="d3">1</data>
+    </edge>
+  </graph>
+</graphml>

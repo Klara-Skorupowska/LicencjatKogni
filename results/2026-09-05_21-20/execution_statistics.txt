@@ -1,0 +1,9 @@
+start time: 05-09-2026 21:20:20 | end time: 05-09-2026 21:43:15 | duration: 00:22:54
+run: 10, iteration: 15Skill Name                | Successes  | Fails     
+-------------------------------------------------------
+SpotTheDoor               | 125        | 0          | 125       
+GoToTheDoor               | 19         | 113        | 132       
+GoThroughTheDoor          | 4          | 100        | 104       
+SpotTheGoal               | 6          | 156        | 162       
+GoToTheGoal               | 3          | 197        | 200       
+GoalReached               | 30         | -20        | 10         // one per run

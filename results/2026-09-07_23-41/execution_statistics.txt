@@ -1,0 +1,10 @@
+start time: 07-09-2026 23:41:50 | end time: 08-09-2026 00:17:02 | duration: 00:35:11
+run: 1000; brain updates: 27
+Skill Name                | Successes  | Fails     
+-------------------------------------------------------
+SpotTheDoor               | 223        | 0          | 223       
+GoToTheDoor               | 25         | 157        | 182       
+GoThroughTheDoor          | 4          | 187        | 191       
+SpotTheGoal               | 47         | 163        | 210       
+GoToTheGoal               | 8          | 187        | 195       
+Finnish                   | 4          | 726        | 730       

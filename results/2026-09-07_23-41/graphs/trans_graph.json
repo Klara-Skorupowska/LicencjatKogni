@@ -1,0 +1,16 @@
+{
+    "SpotTheGoal": [
+        "SpotTheGoal",
+        "GoToTheGoal"
+    ],
+    "Finnish": [],
+    "GoThroughTheDoor": [],
+    "GoToTheDoor": [],
+    "SpotTheDoor": [
+        "SpotTheDoor",
+        "SpotTheGoal",
+        "Finnish",
+        "GoToTheDoor"
+    ],
+    "GoToTheGoal": []
+}
