@@ -1,5 +1,4 @@
 import os
-import ast
 import glob
 import json
 import time
@@ -7,19 +6,20 @@ import cv2
 import numpy as np
 import math
 from communicator import Communicator
+import networkx as nx
 
 # =============================================================================
 # SHARED RENDERERS & UTILS
 # =============================================================================
 
-class SensimotorRenderer:
+class Renderer:
     """Shared drawing logic for sensimotor and graph visualizations."""
     
     def __init__(self):
-        # Defaulting to a clean blue palette (BGR format for OpenCV)
-        self.primary_color = (28, 122, 138)       # Deep 
-        self.secondary_color = (0, 219, 255)      # Light 
-        self.tertiary_color = (219, 250, 255)     # Even Ligher 
+        # Fresh, professional blue palette (BGR format for OpenCV)
+        self.primary_color = (195, 105, 30)       # Rich Steel / Slate Blue
+        self.secondary_color = (235, 185, 90)     # Sky Blue / Cyan Accent
+        self.tertiary_color = (248, 235, 215)     # Pale Ice Blue tint
         
         self.BG_COLOR = (248, 249, 250)
         self.BORDER_COLOR = (40, 44, 52)
@@ -27,10 +27,25 @@ class SensimotorRenderer:
         self.ROBOT_BODY = (40, 44, 52)
         self.PANEL_BORDER = (210, 215, 220)
         
-        self.neutral_gray = (40, 40, 40)
-
+        self.neutral_gray = (130, 135, 140)
         self.LIDAR_ANGLES = [17, 50, 90, 150, 210, 270, 310, 343]
         self.INVARIANT_THRESHOLD = 0.05
+
+    def draw_sample_badge(self, img, n_points, position=(830, 48)):
+        """Draws a badge indicating the number of sample points used."""
+        text = f"N = {n_points} samples"
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        scale = 0.45
+        thickness = 1
+        
+        (text_w, text_h), baseline = cv2.getTextSize(text, font, scale, thickness)
+        x, y = position
+        pad_x, pad_y = 10, 6
+        
+        # Badge background pill
+        cv2.rectangle(img, (x, y - text_h - pad_y), (x + text_w + 2 * pad_x, y + baseline + pad_y), self.tertiary_color, -1)
+        cv2.rectangle(img, (x, y - text_h - pad_y), (x + text_w + 2 * pad_x, y + baseline + pad_y), self.primary_color, 1)
+        cv2.putText(img, text, (x + pad_x, y), font, scale, self.TEXT_MAIN, thickness, cv2.LINE_AA)
 
     def create_base_canvas(self, title, subtitle=None):
         img = np.ones((620, 1000, 3), dtype=np.uint8)
@@ -48,14 +63,13 @@ class SensimotorRenderer:
     def draw_lidar(self, img, lidar_data, center=(230, 280), max_radius=150, is_live=True):
         cv2.putText(img, "LIDAR", (45, 125), cv2.FONT_HERSHEY_SIMPLEX, 0.6, self.TEXT_MAIN, 2, cv2.LINE_AA)
 
-        # Draw background rays
+        # Draw background radial guides
         for ang in self.LIDAR_ANGLES:
             rad = np.deg2rad(ang - 90)
             x_end = int(center[0] + max_radius * np.cos(rad))
             y_end = int(center[1] + max_radius * np.sin(rad))
-            cv2.line(img, center, (x_end, y_end), self.secondary_color, 2, cv2.LINE_AA)
+            cv2.line(img, center, (x_end, y_end), self.tertiary_color, 2, cv2.LINE_AA)
 
-        # Draw active readings / invariants
         for i, ang in enumerate(self.LIDAR_ANGLES):
             rad = np.deg2rad(ang - 90)
             
@@ -68,28 +82,26 @@ class SensimotorRenderer:
                 cv2.line(img, center, (x_val, y_val), self.primary_color, 3, cv2.LINE_AA)
                 cv2.circle(img, (x_val, y_val), 4, self.primary_color, -1, cv2.LINE_AA)
             else:
-                val_min, val_max = lidar_data[i]
-                spread = val_max - val_min
+                # Expects tuple: (val_min, val_max, val_mean)
+                val_min, val_max, val_mean = lidar_data[i]
                 
                 r_min = (max(min(val_min, 0.1), 0.0) / 0.1) * max_radius
                 r_max = (max(min(val_max, 0.1), 0.0) / 0.1) * max_radius
+                r_mean = (max(min(val_mean, 0.1), 0.0) / 0.1) * max_radius
                 
                 x_min = int(center[0] + r_min * np.cos(rad))
                 y_min = int(center[1] + r_min * np.sin(rad))
                 x_max = int(center[0] + r_max * np.cos(rad))
                 y_max = int(center[1] + r_max * np.sin(rad))
+                x_mean = int(center[0] + r_mean * np.cos(rad))
+                y_mean = int(center[1] + r_mean * np.sin(rad))
                 
-                if spread > self.INVARIANT_THRESHOLD:
-                    # Changing variable -> Neutral Gray Line
-                    cv2.line(img, (x_min, y_min), (x_max, y_max), self.neutral_gray, 4, cv2.LINE_AA)
-                else:
-                    # Invariant -> Primary Color Dot at average
-                    r_avg = (r_min + r_max) / 2
-                    x_avg = int(center[0] + r_avg * np.cos(rad))
-                    y_avg = int(center[1] + r_avg * np.sin(rad))
-                    cv2.circle(img, (x_avg, y_avg), 5, self.primary_color, -1, cv2.LINE_AA)
+                # Range bar covering min to max values
+                cv2.line(img, (x_min, y_min), (x_max, y_max), self.secondary_color, 4, cv2.LINE_AA)
+                # Dot for the mean reading along the ray
+                cv2.circle(img, (x_mean, y_mean), 5, self.primary_color, -1, cv2.LINE_AA)
 
-        # Robot body
+        # Robot chassis
         cv2.circle(img, center, 34, self.ROBOT_BODY, -1, cv2.LINE_AA)
         cv2.circle(img, center, 36, (100, 105, 115), 2, cv2.LINE_AA)
         cv2.line(img, (center[0], center[1] - 34), (center[0], center[1] - 18), (255, 255, 255), 2, cv2.LINE_AA)
@@ -108,16 +120,16 @@ class SensimotorRenderer:
         r_h = int(np.clip((right / max_vel) * max_h, -max_h, max_h))
 
         # Background representing max velocity in secondary color
-        cv2.rectangle(img, (150, center[1] - max_h), (190, center[1] + max_h), self.secondary_color, -1)
-        cv2.rectangle(img, (250, center[1] - max_h), (290, center[1] + max_h), self.secondary_color, -1)
+        cv2.rectangle(img, (150, center[1] - max_h), (190, center[1] + max_h), self.tertiary_color, -1)
+        cv2.rectangle(img, (250, center[1] - max_h), (290, center[1] + max_h), self.tertiary_color, -1)
 
         # Active velocities in primary color
         cv2.rectangle(img, (150, center[1] - l_h), (190, center[1]), self.primary_color, -1)
         cv2.rectangle(img, (250, center[1] - r_h), (290, center[1]), self.primary_color, -1)
 
     def draw_grids(self, img, camera_data, is_live=True):
-        rows, cols = 120//16, 160//16
-        cell_size = 210//rows
+        rows, cols = 120 // 16, 160 // 16
+        cell_size = 210 // rows
         
         rf_start_x, rf_start_y = 520, 120
         c_start_x, c_start_y = 520, 380
@@ -129,61 +141,77 @@ class SensimotorRenderer:
             for c in range(cols):
                 idx = (r * cols + c) * 5
                 
-                if is_live:
-                    on_val, off_val, red, green, blue = camera_data[idx: idx + 5]
-                    on_bool = on_val > 0.5
-                    off_bool = off_val > 0.5
-                    variant_rf, variant_color = False, False
-                else:
-                    (on_min, on_max), (off_min, off_max), (r_min, r_max), (g_min, g_max), (b_min, b_max) = camera_data[idx: idx + 5]
-                    
-                    variant_rf = (on_max - on_min > self.INVARIANT_THRESHOLD) or (off_max - off_min > self.INVARIANT_THRESHOLD)
-                    variant_color = (r_max - r_min > self.INVARIANT_THRESHOLD) or (g_max - g_min > self.INVARIANT_THRESHOLD) or (b_max - b_min > self.INVARIANT_THRESHOLD)
-                    
-                    on_bool = (on_min + on_max) / 2.0 > 0.5
-                    off_bool = (off_min + off_max) / 2.0 > 0.5
-                    red = (r_min + r_max) / 2.0
-                    green = (g_min + g_max) / 2.0
-                    blue = (b_min + b_max) / 2.0
-
-                # 1. Receptive Field Logic (On/Off)
-                if variant_rf:
-                    rf_color = self.neutral_gray
-                elif on_bool and not off_bool:
-                    rf_color = self.primary_color
-                elif off_bool and not on_bool:
-                    rf_color = self.secondary_color
-                else:
-                    rf_color = self.tertiary_color
-
                 rf_x = rf_start_x + (c * cell_size)
                 rf_y = rf_start_y + (r * cell_size)
-                cv2.rectangle(img, (rf_x, rf_y), (rf_x + cell_size - 2, rf_y + cell_size - 2), rf_color, -1)
+                cp_x = c_start_x + (c * cell_size)
+                cp_y = c_start_y + (r * cell_size)
 
-                # 2. Color Perception Logic (RGB)
-                if variant_color:
-                    cp_color = self.neutral_gray
-                else:
+                if is_live:
+                    on_val, off_val, red, green, blue = camera_data[idx: idx + 5]
+                    
+                    if on_val > 0.5 and off_val <= 0.5:
+                        rf_color = self.primary_color
+                    elif off_val > 0.5 and on_val <= 0.5:
+                        rf_color = self.secondary_color
+                    else:
+                        rf_color = self.tertiary_color
+                    
                     if max(red, green, blue) <= 1.0:
                         red, green, blue = red * 255.0, green * 255.0, blue * 255.0
                     cp_color = (int(np.clip(blue, 0, 255)), int(np.clip(green, 0, 255)), int(np.clip(red, 0, 255)))
-                
-                cp_x = c_start_x + (c * cell_size)
-                cp_y = c_start_y + (r * cell_size)
-                cv2.rectangle(img, (cp_x, cp_y), (cp_x + cell_size - 2, cp_y + cell_size - 2), cp_color, -1)
+                    
+                    cv2.rectangle(img, (rf_x, rf_y), (rf_x + cell_size - 2, rf_y + cell_size - 2), rf_color, -1)
+                    cv2.rectangle(img, (cp_x, cp_y), (cp_x + cell_size - 2, cp_y + cell_size - 2), cp_color, -1)
+                else:
+                    # Expects 5 stats tuples: (mean, var)
+                    on_stat, off_stat, r_stat, g_stat, b_stat = camera_data[idx: idx + 5]
+                    
+                    # 1. Ganglion cell: skip drawing (transparent) if variance is too high
+                    if on_stat[1] <= self.INVARIANT_THRESHOLD and off_stat[1] <= self.INVARIANT_THRESHOLD:
+                        on_bool = on_stat[0] > 0.5
+                        off_bool = off_stat[0] > 0.5
+                        
+                        if on_bool and not off_bool:
+                            rf_color = self.primary_color
+                        elif off_bool and not on_bool:
+                            rf_color = self.secondary_color
+                        else:
+                            rf_color = self.tertiary_color
+                            
+                        cv2.rectangle(img, (rf_x, rf_y), (rf_x + cell_size - 2, rf_y + cell_size - 2), rf_color, -1)
+
+                    # 2. Cone cells: per-channel variance checking
+                    r_var_high = r_stat[1] > self.INVARIANT_THRESHOLD
+                    g_var_high = g_stat[1] > self.INVARIANT_THRESHOLD
+                    b_var_high = b_stat[1] > self.INVARIANT_THRESHOLD
+
+                    if (r_var_high and g_var_high and b_var_high): ## all variant
+                        cp_color = self.BG_COLOR
+                    else:
+                        r_val = 0.0 if r_var_high else r_stat[0]
+                        g_val = 0.0 if g_var_high else g_stat[0]
+                        b_val = 0.0 if b_var_high else b_stat[0]
+
+                        if max(r_val, g_val, b_val) <= 1.0:
+                            r_val, g_val, b_val = r_val * 255.0, g_val * 255.0, b_val * 255.0
+
+                        cp_color = (int(np.clip(b_val, 0, 255)), int(np.clip(g_val, 0, 255)), int(np.clip(r_val, 0, 255)))
+                    cv2.rectangle(img, (cp_x, cp_y), (cp_x + cell_size - 2, cp_y + cell_size - 2), cp_color, -1)
 
     def draw_transition_graph(self, img, graph_data):
         """Draws the transition graph directly onto the OpenCV image canvas."""
-        nodes = list(graph_data.keys())
+        nodes = graph_data.get("nodes", [])
+        edges = graph_data.get("edges", [])
+
         if not nodes:
-            cv2.putText(img, "No graph data", (400, 300), cv2.FONT_HERSHEY_SIMPLEX, 1, self.GRID_NEUTRAL, 2)
+            cv2.putText(img, "No graph data", (400, 300), cv2.FONT_HERSHEY_SIMPLEX, 1, self.neutral_gray, 2)
             return
 
         center = (500, 350)
         radius = 220
         node_radius = 50
         positions = {}
-        
+            
         # Circular Layout
         angle_step = 2 * math.pi / len(nodes)
         for i, node in enumerate(nodes):
@@ -191,37 +219,204 @@ class SensimotorRenderer:
             y = int(center[1] + radius * math.sin(i * angle_step))
             positions[node] = (x, y)
 
-        # Draw Edges
-        for source, targets in graph_data.items():
-            if source not in positions: continue
-            pt1 = positions[source]
-            for target in targets:
-                if target not in positions: continue
-                pt2 = positions[target]
-                
-                # Math to draw arrow exactly to the edge of the circle, not center
-                dx, dy = pt2[0] - pt1[0], pt2[1] - pt1[1]
-                dist = math.hypot(dx, dy)
-                if dist == 0: continue
-                
-                start_x = int(pt1[0] + (node_radius * dx / dist))
-                start_y = int(pt1[1] + (node_radius * dy / dist))
-                end_x = int(pt2[0] - (node_radius * dx / dist))
-                end_y = int(pt2[1] - (node_radius * dy / dist))
-                
-                cv2.arrowedLine(img, (start_x, start_y), (end_x, end_y), self.secondary_color, 2, tipLength=0.05)
+        # Dynamic thickness scaling limits
+        min_thick = 1.5
+        max_thick = 2.5
+        counts = [edge.get("count", 1) for edge in edges]
+        max_count = max(counts) if counts else 1
+        min_count = min(counts) if counts else 1
 
-        # Draw Nodes
+        # Draw Edges
+        for edge_info in edges:
+            source = edge_info.get("source")
+            target = edge_info.get("target")
+            count = edge_info.get("count", 1)
+
+            if source not in positions or target not in positions:
+                continue
+
+            pt1 = positions[source]
+            pt2 = positions[target]
+                    
+            # Calculate dynamic line thickness based on count
+            if max_count == min_count:
+                thickness = min_thick
+            else:
+                normalized = (count - min_count) / (max_count - min_count)
+                thickness = int(min_thick + normalized * (max_thick - min_thick))
+
+            # Math to draw arrow exactly to the edge of the circle, not center
+            dx, dy = pt2[0] - pt1[0], pt2[1] - pt1[1]
+            dist = math.hypot(dx, dy)
+            if dist == 0:
+                # Arced self-loop above the node
+                loop_r = node_radius // 2
+                loop_center = (pt1[0], pt1[1] - node_radius - loop_r + 6)
+
+                # Draw arc looping clockwise from bottom-left over the top to bottom-right
+                cv2.ellipse(
+                    img,
+                    loop_center,
+                    (loop_r, loop_r),
+                    0,
+                    120,
+                    400,
+                    self.primary_color,
+                    thickness,
+                    lineType=cv2.LINE_AA,
+                )
+
+                # Arrowhead segment continuing tangent toward the node
+                tip_angle = math.radians(415)
+                prev_angle = math.radians(390)
+                pt_prev = (
+                    int(loop_center[0] + loop_r * math.cos(prev_angle)),
+                    int(loop_center[1] + loop_r * math.sin(prev_angle)),
+                )
+                pt_tip = (
+                    int(loop_center[0] + loop_r * math.cos(tip_angle)),
+                    int(loop_center[1] + loop_r * math.sin(tip_angle)),
+                )
+
+                cv2.arrowedLine(
+                    img,
+                    pt_prev,
+                    pt_tip,
+                    self.primary_color,
+                    thickness,
+                    tipLength=0.6,
+                    line_type=cv2.LINE_AA,
+                )
+                continue
+                    
+            start_x = int(pt1[0] + (node_radius * dx / dist))
+            start_y = int(pt1[1] + (node_radius * dy / dist))
+            end_x = int(pt2[0] - (node_radius * dx / dist))
+            end_y = int(pt2[1] - (node_radius * dy / dist))
+
+            # Dynamically adjust tipLength so arrowhead stays proportional to line thickness
+            tip_length = 0.06
+                    
+            cv2.arrowedLine(
+                img, 
+                (start_x, start_y), 
+                (end_x, end_y), 
+                self.primary_color, 
+                thickness, 
+                tipLength=tip_length,
+                line_type=cv2.LINE_AA
+            )
+
+        # Draw Nodes (drawn after edges so edges don't overlap node circles)
         for node, (x, y) in positions.items():
-            cv2.circle(img, (x, y), node_radius, self.secondary_color, -1)
+            cv2.circle(img, (x, y), node_radius, self.tertiary_color, -1)
             cv2.circle(img, (x, y), node_radius, self.primary_color, 2)
-            
-            # Simple text wrap logic
+                
+            # Simple text wrap / centering logic
             text_size = cv2.getTextSize(node, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)[0]
             txt_x = x - text_size[0] // 2
             txt_y = y + text_size[1] // 2
             cv2.putText(img, node, (txt_x, txt_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.TEXT_MAIN, 1, cv2.LINE_AA)
 
+    def draw_unified_GNG(self, img, G, node_colors, edge_colors, gng_colors):
+        """Draws the unified topological GNG plane and legend onto the canvas."""
+        if len(G.nodes) == 0:
+            return
+
+        # Calculate 2D layout projection
+        pos = nx.spring_layout(G, seed=42, k=0.25)
+
+        center_x, center_y = 500, 340
+        scale = 230
+
+        # Draw edges
+        for u, v in G.edges():
+            pt1 = (int(center_x + pos[u][0] * scale), int(center_y + pos[u][1] * scale))
+            pt2 = (int(center_x + pos[v][0] * scale), int(center_y + pos[v][1] * scale))
+            color = edge_colors.get((u, v), self.neutral_gray)
+            cv2.line(img, pt1, pt2, color, 1, cv2.LINE_AA)
+
+        # Draw nodes
+        for node in G.nodes():
+            pt = (int(center_x + pos[node][0] * scale), int(center_y + pos[node][1] * scale))
+            color = node_colors.get(node, self.neutral_gray)
+            cv2.circle(img, pt, 5, color, -1, cv2.LINE_AA)
+            cv2.circle(img, pt, 5, self.TEXT_MAIN, 1, cv2.LINE_AA)
+
+        # Draw legend
+        legend_start_y = 120
+        cv2.putText(img, "Predicates:", (820, legend_start_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.TEXT_MAIN, 1, cv2.LINE_AA)
+        for i, (pred_name, color) in enumerate(gng_colors.items()):
+            y_pos = legend_start_y + 25 + (i * 20)
+            cv2.circle(img, (830, y_pos - 4), 5, color, -1, cv2.LINE_AA)
+            cv2.putText(img, pred_name[:18], (845, y_pos), cv2.FONT_HERSHEY_SIMPLEX, 0.45, self.TEXT_MAIN, 1, cv2.LINE_AA)
+
+
+    def draw_frequency_plot(self, img, timestamps, bin_size_sec=60.0):
+        """Draws an update frequency histogram / rate plot over time."""
+        if not timestamps or len(timestamps) < 2:
+            cv2.putText(img, "Insufficient timestamp data", (350, 320),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, self.neutral_gray, 2, cv2.LINE_AA)
+            return
+
+        ts = np.sort(np.array(timestamps, dtype=float))
+        t_start, t_end = ts[0], ts[-1]
+        duration = max(t_end - t_start, 1.0)
+        
+        # Bin timestamps to calculate frequency (events per bin)
+        n_bins = max(int(np.ceil(duration / bin_size_sec)), 1)
+        bin_edges = np.linspace(t_start, t_start + n_bins * bin_size_sec, n_bins + 1)
+        counts, _ = np.histogram(ts, bins=bin_edges)
+
+        # Plot bounding box dimensions
+        plot_x, plot_y = 90, 140
+        plot_w, plot_h = 820, 380
+        cv2.rectangle(img, (plot_x, plot_y), (plot_x + plot_w, plot_y + plot_h), self.PANEL_BORDER, 1)
+
+        # Summary Metrics
+        avg_freq = len(ts) / (duration / 60.0)  # updates per minute
+        stat_text = f"Total: {len(ts)} updates | Duration: {duration:.1f}s | Avg Rate: {avg_freq:.2f} updates/min"
+        cv2.putText(img, stat_text, (plot_x, plot_y - 20),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.TEXT_MAIN, 1, cv2.LINE_AA)
+
+        max_count = max(int(np.max(counts)), 1)
+        
+        # Draw horizontal gridlines & Y-axis labels
+        grid_steps = 4
+        for i in range(grid_steps + 1):
+            y_val = plot_y + plot_h - int(i * (plot_h / grid_steps))
+            val_label = f"{int(i * (max_count / grid_steps))}"
+            cv2.line(img, (plot_x, y_val), (plot_x + plot_w, y_val), self.tertiary_color, 1, cv2.LINE_AA)
+            cv2.putText(img, val_label, (plot_x - 35, y_val + 4),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.4, self.neutral_gray, 1, cv2.LINE_AA)
+
+        # Draw histogram bars and update frequency trend
+        bar_w = max(int(plot_w / n_bins) - 3, 2)
+        curve_pts = []
+
+        for i, count in enumerate(counts):
+            bar_h = int((count / max_count) * (plot_h - 20))
+            bx = plot_x + int(i * (plot_w / n_bins)) + 2
+            by = plot_y + plot_h - bar_h
+
+            # Bar representing update count in that time interval
+            cv2.rectangle(img, (bx, by), (bx + bar_w, plot_y + plot_h), self.secondary_color, -1)
+            cv2.rectangle(img, (bx, by), (bx + bar_w, plot_y + plot_h), self.primary_color, 1)
+            
+            # Point for interpolation line
+            pt_center = (bx + bar_w // 2, by)
+            curve_pts.append(pt_center)
+
+        if len(curve_pts) > 1:
+            for i in range(len(curve_pts) - 1):
+                cv2.line(img, curve_pts[i], curve_pts[i + 1], self.BORDER_COLOR, 2, cv2.LINE_AA)
+            for pt in curve_pts:
+                cv2.circle(img, pt, 3, self.primary_color, -1, cv2.LINE_AA)
+
+        # X-axis label
+        x_label = f"Elapsed Time (Bins of {int(bin_size_sec)}s) ->"
+        cv2.putText(img, x_label, (plot_x + plot_w // 2 - 100, plot_y + plot_h + 35),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.TEXT_MAIN, 1, cv2.LINE_AA)
 
 # =============================================================================
 # PICTURE GENERATORS (STATIC)
@@ -230,12 +425,20 @@ class SensimotorRenderer:
 class PictureGenerator:
     def __init__(self, logs_root="logs"):
         self.logs_root = logs_root
-        self.renderer = SensimotorRenderer()
+        self.renderer = Renderer()
 
     def get_latest_session(self):
         if not os.path.exists(self.logs_root): return None
         session_dirs = [os.path.join(self.logs_root, d) for d in os.listdir(self.logs_root) if os.path.isdir(os.path.join(self.logs_root, d))]
         return max(session_dirs, key=os.path.basename) if session_dirs else None
+
+    def get_pictures_dir(self):
+        latest_session = self.get_latest_session()
+        if not latest_session:
+            return None
+        out_dir = os.path.join(latest_session, "pictures")
+        os.makedirs(out_dir, exist_ok=True)
+        return out_dir
 
     def run(self): raise NotImplementedError
 
@@ -255,27 +458,72 @@ class GNGPictureGenerator(PictureGenerator):
                 nodes = np.array(data.get("nodes", []))
                 if len(nodes) == 0: continue
                 
-                # Find invariants: get min and max across all vectors for this GNG
+                # Compute statistical descriptors across all point nodes
                 min_vals = np.min(nodes, axis=0)
                 max_vals = np.max(nodes, axis=0)
+                mean_vals = np.mean(nodes, axis=0)
+                var_vals = np.var(nodes, axis=0)
                 
                 file_base = os.path.splitext(os.path.basename(json_path))[0]
                 img = self.renderer.create_base_canvas(f"GNG INVARIANTS: {file_base}")
                 
-                lidar_data = list(zip(min_vals[:8], max_vals[:8]))
+                # Pass min, max, and mean for all lidar directions
+                lidar_data = list(zip(min_vals[:8], max_vals[:8], mean_vals[:8]))
                 self.renderer.draw_lidar(img, lidar_data, is_live=False)
                 
-                camera_data = list(zip(min_vals[8:], max_vals[8:]))
+                # Pass mean and separate per-channel variance for Ganglion and Cone grids
+                camera_data = list(zip(mean_vals[8:], var_vals[8:]))
                 self.renderer.draw_grids(img, camera_data, is_live=False)
 
-                out_dir = os.path.join(symbols_dir, "pictures")
-                os.makedirs(out_dir, exist_ok=True)
+                # Overlay bottom-left badge showing sample point count
+                self.renderer.draw_sample_badge(img, n_points=len(nodes))
+
+                out_dir = self.get_pictures_dir()
+                if not out_dir:
+                    return
                 out_path = os.path.join(out_dir, f"{file_base}_invariants.png")
                 cv2.imwrite(out_path, img)
                 print(f"[PictureGenerator] Saved GNG invariants to {out_path}")
             except Exception as e:
                 print(f"[PictureGenerator] Failed to process {json_path}: {e}")
 
+class UpdateFrequencyPictureGenerator(PictureGenerator):
+    def __init__(self, logs_root="logs", timestamp_file="timestamps.txt", bin_size_sec=60.0):
+        super().__init__(logs_root)
+        self.timestamp_file = timestamp_file
+        self.bin_size_sec = bin_size_sec
+
+    def _resolve_file_path(self):
+        # Checks session directory first, then root directory
+        latest_session = self.get_latest_session()
+        if latest_session:
+            sess_path = os.path.join(latest_session, self.timestamp_file)
+            if os.path.exists(sess_path):
+                return sess_path
+        if os.path.exists(self.timestamp_file):
+            return self.timestamp_file
+        return None
+
+    def run(self):
+        file_path = self._resolve_file_path()
+        if not file_path:
+            print(f"[PictureGenerator] File not found: {self.timestamp_file}")
+            return
+
+        try:
+            with open(file_path, "r") as f:
+                timestamps = [float(line.strip()) for line in f if line.strip()]
+            
+            img = self.renderer.create_base_canvas("UPDATE FREQUENCY OVER TIME")
+            self.renderer.draw_frequency_plot(img, timestamps, bin_size_sec=self.bin_size_sec)
+            self.renderer.draw_sample_badge(img, n_points=len(timestamps))
+
+            out_dir = self.get_pictures_dir() or "."
+            out_path = os.path.join(out_dir, "update_frequency.png")
+            cv2.imwrite(out_path, img)
+            print(f"[PictureGenerator] Saved frequency plot to {out_path}")
+        except Exception as e:
+            print(f"[PictureGenerator] Failed to generate frequency plot: {e}")
 
 class TransGraphPictureGenerator(PictureGenerator):
     def run(self):
@@ -293,8 +541,9 @@ class TransGraphPictureGenerator(PictureGenerator):
             img = self.renderer.create_base_canvas("TRANSITION GRAPH MONITOR")
             self.renderer.draw_transition_graph(img, graph_data)
 
-            out_dir = os.path.join(graphs_dir, "pictures")
-            os.makedirs(out_dir, exist_ok=True)
+            out_dir = self.get_pictures_dir()
+            if not out_dir:
+                return
             out_path = os.path.join(out_dir, "trans_graph_visualised.png")
             cv2.imwrite(out_path, img)
             print(f"[PictureGenerator] Saved Transition Graph image to {out_path}")
@@ -302,9 +551,80 @@ class TransGraphPictureGenerator(PictureGenerator):
             print(f"[PictureGenerator] Failed to generate TransGraph: {e}")
 
 
+class UnifiedGNGPictureGenerator(PictureGenerator):
+    def __init__(self, logs_root="logs"):
+        super().__init__(logs_root)
+        self.gng_colors = {}
+        # Borrowing the distinct, vibrant BGR color palette from the live monitor
+        self.color_palette = [
+            (60, 60, 220),   (60, 220, 60),   (220, 100, 60),
+            (60, 200, 220),  (200, 60, 200),  (220, 200, 60),
+            (100, 120, 255), (255, 120, 100), (100, 255, 120)
+        ]
+
+    def _get_color(self, predicate_name):
+        if predicate_name not in self.gng_colors:
+            color_idx = len(self.gng_colors) % len(self.color_palette)
+            self.gng_colors[predicate_name] = self.color_palette[color_idx]
+        return self.gng_colors[predicate_name]
+
+    def run(self):
+        latest_session = self.get_latest_session()
+        if not latest_session: return
+        symbols_dir = os.path.join(latest_session, "PDDL", "symbols")
+        if not os.path.exists(symbols_dir): return
+
+        json_files = glob.glob(os.path.join(symbols_dir, "*.json"))
+        if not json_files: return
+
+        G = nx.Graph()
+        node_colors = {}
+        edge_colors = {}
+        
+        for json_path in json_files:
+            try:
+                with open(json_path, 'r') as f:
+                    data = json.load(f)
+                
+                pred_name = os.path.splitext(os.path.basename(json_path))[0]
+                color = self._get_color(pred_name)
+                
+                nodes = data.get("nodes", [])
+                for i in range(len(nodes)):
+                    node_id = f"{pred_name}_{i}"
+                    G.add_node(node_id)
+                    node_colors[node_id] = color
+
+                edges_dict = data.get("edges", {})
+                for edge_str in edges_dict.keys():
+                    u_str, v_str = edge_str.split(",")
+                    u_id = f"{pred_name}_{u_str}"
+                    v_id = f"{pred_name}_{v_str}"
+                    G.add_edge(u_id, v_id)
+                    edge_colors[(u_id, v_id)] = color
+                    edge_colors[(v_id, u_id)] = color
+            except Exception as e:
+                print(f"[PictureGenerator] Failed to process {json_path} for unified graph: {e}")
+
+        if len(G.nodes) == 0: return
+
+        img = self.renderer.create_base_canvas("UNIFIED GNG PLANE", "Topological state space mapping")
+        self.renderer.draw_unified_GNG(img, G, node_colors, edge_colors, self.gng_colors)
+
+        out_dir = self.get_pictures_dir()
+        if not out_dir: return
+        out_path = os.path.join(out_dir, "unified_gng_plane.png")
+        cv2.imwrite(out_path, img)
+        print(f"[PictureGenerator] Saved Unified GNG plane to {out_path}")
+
 class PipelinePictureGenerator(PictureGenerator):
     def __init__(self, logs_root="logs"):
-        self.generators = [GNGPictureGenerator(logs_root), TransGraphPictureGenerator(logs_root)]
+        self.generators = [
+            GNGPictureGenerator(logs_root), 
+            TransGraphPictureGenerator(logs_root),
+            UnifiedGNGPictureGenerator(logs_root),
+            UpdateFrequencyPictureGenerator(logs_root)
+        ]
 
     def run(self):
         for gen in self.generators:
@@ -314,7 +634,7 @@ class PipelinePictureGenerator(PictureGenerator):
 # LIVE MONITORING 
 # =============================================================================
 
-class LiveSensimotorMonitor(SensimotorRenderer):
+class LiveSensimotorMonitor(Renderer):
     def __init__(self, bus: Communicator, timeout: float = 0.1):
         super().__init__()
         self.bus = bus
@@ -364,8 +684,57 @@ class LiveSensimotorMonitor(SensimotorRenderer):
             cv2.destroyWindow(self.window_name)
             self._window_created = False
 
+class LiveUpdateFrequencyMonitor(Renderer):
+    def __init__(self, timestamp_path="timestamps.txt", bin_size_sec=60.0, poll_interval=1.0):
+        super().__init__()
+        self.timestamp_path = timestamp_path
+        self.bin_size_sec = bin_size_sec
+        self.poll_interval = poll_interval
+        self._last_poll_time = 0.0
+        self._last_mtime = 0.0
+        self.window_name = "Live Update Frequency Monitor"
+        self._window_created = False
 
-class LiveGraphMonitor(SensimotorRenderer):
+    def _ensure_window(self):
+        if not self._window_created:
+            cv2.namedWindow(self.window_name, cv2.WINDOW_AUTOSIZE)
+            placeholder = self.create_base_canvas("LIVE UPDATE FREQUENCY", "Waiting for timestamp data...")
+            cv2.imshow(self.window_name, placeholder)
+            self._window_created = True
+
+    def update(self):
+        self._ensure_window()
+        cv2.waitKey(1)
+
+        now = time.time()
+        if now - self._last_poll_time < self.poll_interval:
+            return
+        self._last_poll_time = now
+
+        if not os.path.exists(self.timestamp_path) or os.path.getsize(self.timestamp_path) == 0:
+            return
+
+        try:
+            mtime = os.path.getmtime(self.timestamp_path)
+            if mtime > self._last_mtime:
+                with open(self.timestamp_path, "r") as f:
+                    timestamps = [float(line.strip()) for line in f if line.strip()]
+
+                img = self.create_base_canvas("LIVE UPDATE FREQUENCY", f"Tracking: {self.timestamp_path}")
+                self.draw_frequency_plot(img, timestamps, bin_size_sec=self.bin_size_sec)
+                self.draw_sample_badge(img, n_points=len(timestamps))
+
+                cv2.imshow(self.window_name, img)
+                self._last_mtime = mtime
+        except Exception as e:
+            print(f"[LiveUpdateFrequencyMonitor] Error loading timestamps: {e}")
+
+    def close(self):
+        if self._window_created:
+            cv2.destroyWindow(self.window_name)
+            self._window_created = False
+
+class LiveGraphMonitor(Renderer):
     def __init__(self, logs_root="logs", trans_filename="trans_graph.json", poll_interval=1.0):
         super().__init__()
         self.logs_root = logs_root
@@ -423,7 +792,7 @@ class LiveGraphMonitor(SensimotorRenderer):
 
 import networkx as nx
 
-class LiveGNGMonitor(SensimotorRenderer):
+class LiveGNGMonitor(Renderer):
     def __init__(self, logs_root="logs", poll_interval=1.0):
         super().__init__()
         self.logs_root = logs_root
@@ -486,7 +855,7 @@ class LiveGNGMonitor(SensimotorRenderer):
         json_files = glob.glob(os.path.join(symbols_dir, "*.json"))
         if not json_files: return
 
-        # 1. Check if any file was updated
+        # Check if any symbol file has changed
         needs_update = False
         for f in json_files:
             mtime = os.path.getmtime(f)
@@ -496,7 +865,6 @@ class LiveGNGMonitor(SensimotorRenderer):
                 
         if not needs_update: return
 
-        # 2. Build the unified topological graph
         G = nx.Graph()
         node_colors = {}
         edge_colors = {}
@@ -509,14 +877,12 @@ class LiveGNGMonitor(SensimotorRenderer):
                 pred_name = os.path.splitext(os.path.basename(json_path))[0]
                 color = self._get_color(pred_name)
                 
-                # Add nodes (use string names to prevent ID clashes between files)
                 nodes = data.get("nodes", [])
                 for i in range(len(nodes)):
                     node_id = f"{pred_name}_{i}"
                     G.add_node(node_id)
                     node_colors[node_id] = color
 
-                # Add edges
                 edges_dict = data.get("edges", {})
                 for edge_str in edges_dict.keys():
                     u_str, v_str = edge_str.split(",")
@@ -524,44 +890,14 @@ class LiveGNGMonitor(SensimotorRenderer):
                     v_id = f"{pred_name}_{v_str}"
                     G.add_edge(u_id, v_id)
                     edge_colors[(u_id, v_id)] = color
-                    edge_colors[(v_id, u_id)] = color # undirected
+                    edge_colors[(v_id, u_id)] = color
             except Exception as e:
                 print(f"[LiveGNGMonitor] Failed to read {json_path}: {e}")
 
         if len(G.nodes) == 0: return
 
-        # 3. Calculate 2D Projection using Spring Layout
-        pos = nx.spring_layout(G, seed=42, k=0.25) # k controls optimal distance between nodes
-
-        # 4. Render to OpenCV Canvas
         img = self.create_base_canvas("LIVE GNG PLANE", "Topological state space mapping")
-        
-        # Scaling variables to fit the canvas
-        center_x, center_y = 500, 340
-        scale = 230 
-
-        # Draw Edges
-        for u, v in G.edges():
-            pt1 = (int(center_x + pos[u][0] * scale), int(center_y + pos[u][1] * scale))
-            pt2 = (int(center_x + pos[v][0] * scale), int(center_y + pos[v][1] * scale))
-            color = edge_colors.get((u, v), self.neutral_gray)
-            cv2.line(img, pt1, pt2, color, 1, cv2.LINE_AA)
-
-        # Draw Nodes
-        for node in G.nodes():
-            pt = (int(center_x + pos[node][0] * scale), int(center_y + pos[node][1] * scale))
-            color = node_colors.get(node, self.neutral_gray)
-            cv2.circle(img, pt, 5, color, -1, cv2.LINE_AA)
-            cv2.circle(img, pt, 5, self.TEXT_MAIN, 1, cv2.LINE_AA) # Dark border
-
-        # 5. Draw Legend
-        legend_start_y = 120
-        cv2.putText(img, "Predicates:", (820, legend_start_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.TEXT_MAIN, 1, cv2.LINE_AA)
-        
-        for i, (pred_name, color) in enumerate(self.gng_colors.items()):
-            y_pos = legend_start_y + 25 + (i * 20)
-            cv2.circle(img, (830, y_pos - 4), 5, color, -1, cv2.LINE_AA)
-            cv2.putText(img, pred_name[:18], (845, y_pos), cv2.FONT_HERSHEY_SIMPLEX, 0.45, self.TEXT_MAIN, 1, cv2.LINE_AA)
+        self.draw_unified_GNG(img, G, node_colors, edge_colors, self.gng_colors)
 
         cv2.imshow(self.window_name, img)
 

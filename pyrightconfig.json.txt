@@ -1,0 +1,12 @@
+{
+  "include": [
+    "."
+  ],
+  "exclude": [
+    "**/environment",
+    "**/node_modules",
+    "**/__pycache__"
+  ],
+  "reportUnusedVariable": "warning",
+  "reportGeneralTypeIssues": "warning"
+}

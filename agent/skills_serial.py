@@ -14,7 +14,7 @@ import numpy as np
 # 3) go through the door
 # 4) spot the finish pad
 # 5) go to the finish pad
-# 6) finnish
+# 6) Finish
 
 class SerialSkill(Skill):
     '''
@@ -387,10 +387,9 @@ class GoThroughTheDoor(SerialSkill):
             room = self.bus.call_service(f"/supervisor/ask/room_number")
             zone = self.bus.call_service(f"/supervisor/ask/door_zone")
             # calculations
-            front = min(distances[0], distances[1], distances[6], distances[7])
-            clear_path = front > self.save_dist
+            open_space = min(distances) > self.save_dist
             # logic
-            if not room == init_room and not zone and clear_path:
+            if not room == init_room and not zone and open_space:
                 self.wheels.set_parameters([0.0, 0.0])
                 print(f"\t[Skill] {self.__class__.__name__} finished successfully.")
                 return True 
@@ -434,7 +433,7 @@ class GoThroughTheDoor(SerialSkill):
         print(f"\t[Skill] {self.__class__.__name__} failed. Timed out.")
         return False 
 
-class Finnish(SerialSkill):
+class Finish(SerialSkill):
     '''
     Checks if it is at goal zone and facing the goal then teleports agent back (restart)
     '''
@@ -458,31 +457,56 @@ class Finnish(SerialSkill):
         in_goal_zone = self.bus.call_service("/supervisor/ask/goal_zone")
         facing_goal = False
         hue_tol = 25
-        lower_hue = (self.hue - hue_tol)%180
-        higher_hue = (self.hue + hue_tol)%180
-        if lower_hue > higher_hue:
-            temp = lower_hue
-            lower_hue = higher_hue
-            higher_hue = temp
-        lower_HSV = np.array([lower_hue, 50, 50])
-        upper_HSV = np.array([higher_hue, 255, 255])
 
         frame, _ = self.read_sensors()
         if frame is None:
             return False
 
+        # 1. DOWNSCALE FOR PERFORMANCE
+        # Reduces the number of pixels processed by 75%, vastly improving FPS
+        scale_percent = 0.5 
+        width = int(frame.shape[1] * scale_percent)
+        height = int(frame.shape[0] * scale_percent)
+        frame = cv2.resize(frame, (width, height), interpolation=cv2.INTER_LINEAR)
+
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-        mask = cv2.inRange(hsv, lower_HSV, upper_HSV)
+        lower_hue = self.hue - hue_tol
+        higher_hue = self.hue + hue_tol
 
-        moments = cv2.moments(mask)
+        # 2. HUE WRAP-AROUND LOGIC
+        if lower_hue < 0:
+            mask1 = cv2.inRange(hsv, np.array([0, 50, 50]), np.array([higher_hue, 255, 255]))
+            mask2 = cv2.inRange(hsv, np.array([180 + lower_hue, 50, 50]), np.array([180, 255, 255]))
+            mask = cv2.bitwise_or(mask1, mask2)
+        elif higher_hue > 180:
+            mask1 = cv2.inRange(hsv, np.array([lower_hue, 50, 50]), np.array([180, 255, 255]))
+            mask2 = cv2.inRange(hsv, np.array([0, 50, 50]), np.array([higher_hue - 180, 255, 255]))
+            mask = cv2.bitwise_or(mask1, mask2)
+        else:
+            mask = cv2.inRange(hsv, np.array([lower_hue, 50, 50]), np.array([higher_hue, 255, 255]))
+
+        # Center parameters mapped to the resized frame
         frame_center_x = frame.shape[1] // 2
-        center_tolerance = frame.shape[1]//10 # 10%
+        center_tolerance = frame.shape[1] // 4 # 25% each way
+        MIN_PIXELS = 100
 
-        if moments["m00"] > 100:  # filtering noise
-            color_center_x = moments["m10"]//moments["m00"]
-            if abs(color_center_x - frame_center_x) < center_tolerance:
-                facing_goal = True
+        # 3. CONTOUR TRACKING
+        # Find all blobs in the mask
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
+        if contours:
+            # Isolate the largest blob to avoid tracking background noise/distractions
+            largest_contour = max(contours, key=cv2.contourArea)
+        
+            # contourArea returns the actual pixel area, so we don't multiply by 255 here
+            if cv2.contourArea(largest_contour) > MIN_PIXELS:
+                M = cv2.moments(largest_contour)
+                if M["m00"] != 0:
+                    color_center_x = int(M["m10"] / M["m00"])
+                    if abs(color_center_x - frame_center_x) < center_tolerance:
+                        facing_goal = True
+
+        # 4. FINAL STATE EVALUATION
         if in_goal_zone and facing_goal:
             print(f"\t[Skill] {self.__class__.__name__} succeed. Restart.")
             self.bus.call_service("/supervisor/do/restart")

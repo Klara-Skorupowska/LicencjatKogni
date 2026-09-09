@@ -2,11 +2,11 @@ import numpy as np
 
 # Predicate as GNG (Aligned with Fritzke's Standard GNG Literature)
 class Predicate():
-    def __init__(self, max_vectors, base_radius=0.1, max_radius=1.0, 
+    def __init__(self, max_points, base_radius=0.1, max_radius=1.0, 
                  learning_rate_b=0.2, learning_rate_n=0.006, 
                  max_edge_age=5, lambda_step=1, alpha=0.5, d=0.995):
         
-        self.max_vectors = max_vectors
+        self.max_points = max_points
         self.base_radius = base_radius    
         self.max_radius = max_radius      
         
@@ -171,7 +171,7 @@ class Predicate():
             self.tidy()
             
             # 7. Insert new node periodically based on maximum error
-            if self.update_count % self.lambda_step == 0 and len(self.nodes) < self.max_vectors:
+            if self.update_count % self.lambda_step == 0 and len(self.nodes) < self.max_points:
                 self._insert_node()
                 
             # 8. Global error decay

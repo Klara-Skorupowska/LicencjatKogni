@@ -10,13 +10,19 @@
 ()  - zrobione, a nie było planowane
 ---------------------------------------
 ---------------------------------------
-
+### 
 ### 07.09.2026 ###
-[] do obrazków dodać GNG plane
-[] generowanie PDDL
+[o] do obrazków dodać GNG plane
+[o] generowanie PDDL
+[o] losowaine punktu startowego przy restarcie
+[o] do trans grafu: zliczać ile razy dodano daną krawędź: +1 za dodanie krawędzi, -1 za jej usunięcie, 0 == brak krawędzi, nie ma jej usuwania ??? 
+[o] Obrazki: dla wszystkich lidarów min-max i średnia, kolory osobno liczyć ich wariancję, zmienne rzeczy w kolorze tła / przezroczyste, info z ilu punktów składa się ten predykat
+[x] zapisać timestamps updatów --> zapisuje ile było batchy i to idzie do statystyk
+[0] zapisać timestamps add_to_buffor --> zapisuje i rysuje histogram
+[] skillerror = close everything safely
 
 ### 06.09.2026 ###
-[o] włożyć GNG do środka!!!
+[o] włożyć GNG do środka!!! I AM A GENIUS
 
 ### 05.09.2026 ###
 [o] ._. start time: 05%09%2026 13%46%33 | end time: 05%09%2026 13%47%55 | duration: 00%01%22

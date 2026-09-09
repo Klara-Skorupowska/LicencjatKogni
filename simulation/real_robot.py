@@ -1,6 +1,7 @@
 ### physical parameters of the robot, for simulation (in RL it would be The robot)
 
 import pybullet as p
+import random
 
 from communicator import Communicator
 
@@ -13,7 +14,9 @@ class RealRobot(Object):
         super().__init__()  
         self.anchored = False
         self.model_name = "epuck2"
-        self.initial_position = [- 0.375, - 0.375, 0.05]
+        x_pos = random.uniform(-0.45, -0.05)
+        y_pos = random.uniform(-0.45, 0.45)
+        self.initial_position = [x_pos, y_pos, 0.05]
         self.initial_orientation = [0, 0, 0, 1] 
         self.bus = bus
         self.sensors = {

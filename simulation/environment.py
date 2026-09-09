@@ -22,6 +22,8 @@ class Environment():
         p.connect(p.GUI)
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
         p.setRealTimeSimulation(0)
+        p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0)
+        p.configureDebugVisualizer(p.COV_ENABLE_RGB_BUFFER_PREVIEW, 1)
         p.resetDebugVisualizerCamera(1.0, 90, -120, [0,0,0])
         p.setGravity(0, 0, -9.81)
         p.setTimeStep(time_step)

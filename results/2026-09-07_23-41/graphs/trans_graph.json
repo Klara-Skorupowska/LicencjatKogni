@@ -3,13 +3,13 @@
         "SpotTheGoal",
         "GoToTheGoal"
     ],
-    "Finnish": [],
+    "Finish": [],
     "GoThroughTheDoor": [],
     "GoToTheDoor": [],
     "SpotTheDoor": [
         "SpotTheDoor",
         "SpotTheGoal",
-        "Finnish",
+        "Finish",
         "GoToTheDoor"
     ],
     "GoToTheGoal": []

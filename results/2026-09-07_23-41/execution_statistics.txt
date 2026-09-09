@@ -7,4 +7,4 @@ GoToTheDoor               | 25         | 157        | 182
 GoThroughTheDoor          | 4          | 187        | 191       
 SpotTheGoal               | 47         | 163        | 210       
 GoToTheGoal               | 8          | 187        | 195       
-Finnish                   | 4          | 726        | 730       
+Finish                   | 4          | 726        | 730       

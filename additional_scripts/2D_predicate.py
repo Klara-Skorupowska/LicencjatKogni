@@ -251,33 +251,44 @@ class VoronoiHypersolidGNG:
             show_plot = True
             
         ax.clear()
+
+        # 0. Sampled Points (Faint green for positive, faint red for negative)
+        if test_points:
+            pos_pts = [p for p, val in test_points if val]
+            neg_pts = [p for p, val in test_points if not val]
+            if pos_pts:
+                pos_arr = np.array(pos_pts)
+                ax.scatter(pos_arr[:, 0], pos_arr[:, 1], c='green', alpha=0.15, s=15, zorder=0)
+            if neg_pts:
+                neg_arr = np.array(neg_pts)
+                ax.scatter(neg_arr[:, 0], neg_arr[:, 1], c='red', alpha=0.15, s=15, zorder=0)
         
         # 1. Target True Solid
         if true_circles is not None:
             for center, rad in true_circles:
-                tc = plt.Circle(center, rad, color='black', alpha=0.1, 
-                                edgecolor='forestgreen', linestyle='--', linewidth=2, zorder=0)
+                tc = plt.Circle(center, rad, color='black', alpha=0.05, 
+                                edgecolor='forestgreen', linestyle='--', linewidth=2, zorder=1)
                 ax.add_patch(tc)
 
         # 2. Learned Voronoi boundaries
         for i, node in enumerate(self.nodes):
             local_radius = self._get_local_radius(i)
             circle = plt.Circle((node[0], node[1]), local_radius, color='skyblue', 
-                                alpha=0.2, edgecolor='blue', linewidth=1)
+                                alpha=0.2, edgecolor='blue', linewidth=1, zorder=2)
             ax.add_patch(circle)
             
         # 3. GNG edges
         for (u, v) in self.edges.keys():
             if u < len(self.nodes) and v < len(self.nodes):
                 n1, n2 = self.nodes[u], self.nodes[v]
-                ax.plot([n1[0], n2[0]], [n1[1], n2[1]], color='gray', zorder=1, linewidth=1.5)
+                ax.plot([n1[0], n2[0]], [n1[1], n2[1]], color='gray', zorder=3, linewidth=1.5)
             
-        # 4. Save points (nodes)
+        # 4. Save points (nodes) -> Changed to deep blue
         nodes_arr = np.array(self.nodes)
-        ax.scatter(nodes_arr[:, 0], nodes_arr[:, 1], c='red', marker='o', s=40, zorder=2)
+        ax.scatter(nodes_arr[:, 0], nodes_arr[:, 1], c='darkblue', marker='o', s=40, zorder=4)
         
         ax.set_xlim(-8, 8)
-        ax.set_ylim(-5, 5)
+        ax.set_ylim(-8, 8)
         ax.set_aspect('equal')
         ax.set_title(f"{title} (Nodes: {len(self.nodes)})")
         ax.grid(True, linestyle='--', alpha=0.5)
@@ -290,11 +301,13 @@ class VoronoiHypersolidGNG:
 # ANIMATION AND TESTING SCRIPT
 # ==========================================
 
-hs = VoronoiHypersolidGNG(max_points=80, base_radius=0.25, max_radius=2.0)
+# Change the max_points and max_radius in the initialization
+hs = VoronoiHypersolidGNG(max_points=150, base_radius=0.25, max_radius=0.8)
 
+# Replace the existing target_shapes list
 target_shapes = [
-    ((-4, 0), 2.0),
-    ((4, 0), 2.0)
+    ((0, 0), 4.0),  # Outer boundary
+    ((0, 0), 2.0)   # Inner boundary (hole)
 ]
 
 # Set up the matplotlib figure for animation
@@ -304,17 +317,19 @@ updates_per_frame = 50
 total_frames = 150
 
 def animate(frame):
-    # Perform a batch of updates per frame to speed up visualization
+    current_batch_points = []
+
     for _ in range(updates_per_frame):
         pt = np.random.uniform(-7, 7, 2)
-        dist_to_c1 = np.linalg.norm(pt - np.array([-4, 0]))
-        dist_to_c2 = np.linalg.norm(pt - np.array([4, 0]))
+        dist = np.linalg.norm(pt - np.array([0, 0]))
         
-        valence = dist_to_c1 < 2.0 or dist_to_c2 < 2.0
+        valence = 2.0 < dist < 4.0
         hs.update(pt, valence)
+        current_batch_points.append((pt, valence))
         
-    # Redraw
+    # Redraw passing the current batch of points
     hs.plot_2d(title=f"GNG Learning - Frame {frame * updates_per_frame} updates", 
+               test_points=current_batch_points,
                true_circles=target_shapes, ax=ax)
 
 # Run animation

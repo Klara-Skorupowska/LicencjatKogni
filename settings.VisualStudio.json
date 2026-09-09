@@ -1,0 +1,6 @@
+/* Visual Studio Settings File */
+{
+  "textEditor.general.display.bracePairColorization": true,
+  "textEditor.general.display.blockStructure": true,
+  "textEditor.general.display.errorSquiggles": true
+}

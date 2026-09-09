@@ -1,4 +1,4 @@
-import math
+import random
 from communicator import Communicator
 import numpy as np
 import pybullet as p
@@ -129,8 +129,11 @@ class Supervisor():
     def restart(self, request=None):
         print("[Supervisor] Robot in environment reset.")
         # Reset robot position
-        position, orientation = self.bus.call_service(f"/realrobot/give_initial_position")
+        _, orientation = self.bus.call_service(f"/realrobot/give_initial_position")
+        x_pos = random.uniform(-0.45, -0.05)
+        y_pos = random.uniform(-0.45, 0.45)
+        position = [x_pos, y_pos, 0.05]
         p.resetBasePositionAndOrientation(self.robot_id, position, orientation)
         p.resetBaseVelocity(self.robot_id, [0, 0, 0], [0, 0, 0])
-        time.sleep(3.0)
+        time.sleep(1.0)
         
