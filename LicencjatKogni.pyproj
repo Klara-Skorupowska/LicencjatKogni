@@ -130,6 +130,7 @@
     <Folder Include="agent\" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include="models\arena_color.xacro" />
     <Content Include="logs\2026-09-03_13-46\graphs\final\gng_graph.json" />
     <Content Include="logs\2026-09-03_13-46\graphs\final\transitional_graph.graphml" />
     <Content Include="logs\2026-09-03_13-46\graphs\live\gng_graph.json" />
@@ -208,6 +209,7 @@
     <Content Include="models\arena.xacro" />
     <Content Include="models\epuck2.xacro" />
     <Content Include="models\urdfs\arena.urdf" />
+    <Content Include="models\urdfs\arena_color.urdf" />
     <Content Include="models\urdfs\arena_GoForward.urdf" />
     <Content Include="models\urdfs\arena_OpenDoor.urdf" />
     <Content Include="models\urdfs\epuck2.urdf" />

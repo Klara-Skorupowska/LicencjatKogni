@@ -30,7 +30,7 @@ class TheAgent(Agent):
         self.lidars = VirtualSensorArray(self.bus, [LidarSensor(self.bus, ang) for ang in [17, 50, 90, 150, 210, 270, 310, 343]])
         self.camera = CameraSensor(self.bus)
         
-        self.max_runs = 1000     # how many explore actions
+        self.max_runs = 2000     # how many explore actions
         self.N_tests = 100       # how many starts from different positions with ready predicates
 
         self.fail_buffor = []
