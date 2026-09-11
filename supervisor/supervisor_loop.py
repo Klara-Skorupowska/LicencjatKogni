@@ -4,7 +4,7 @@ import threading
 import time
 from .visualize import *
 
-def supervisor_loop(bus: Communicator, setup_complete_event, stop_event: threading.Event):
+def supervisor_loop(bus: Communicator, setup_complete_event: threading.Event, stop_event: threading.Event):
     """Runs continuously at 5Hz, completely independent of the agent and simulation."""
     print("[Supervisor] Starting...")
     print("[Supervisor] Loading statistics...")
@@ -21,9 +21,9 @@ def supervisor_loop(bus: Communicator, setup_complete_event, stop_event: threadi
         while not stop_event.is_set():
             # updating statusboards and saving continuous data
             for monitor in monitors:
+                if stop_event.is_set(): break
                 monitor.update()
             time.sleep(time_step)
-            pass
 
     except KeyboardInterrupt:
         print("[Supervisor] Thread stopped by user.")

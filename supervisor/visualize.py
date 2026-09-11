@@ -29,7 +29,7 @@ class Renderer:
         
         self.neutral_gray = (130, 135, 140)
         self.LIDAR_ANGLES = [17, 50, 90, 150, 210, 270, 310, 343]
-        self.INVARIANT_THRESHOLD = 0.05
+        self.INVARIANT_THRESHOLD = 0.1
 
     def draw_sample_badge(self, img, n_points, position=(830, 48)):
         """Draws a badge indicating the number of sample points used."""
@@ -85,9 +85,9 @@ class Renderer:
                 # Expects tuple: (val_min, val_max, val_mean)
                 val_min, val_max, val_mean = lidar_data[i]
                 
-                r_min = (max(min(val_min, 0.1), 0.0) / 0.1) * max_radius
-                r_max = (max(min(val_max, 0.1), 0.0) / 0.1) * max_radius
-                r_mean = (max(min(val_mean, 0.1), 0.0) / 0.1) * max_radius
+                r_min = (max(min(val_min, 1), 0.0) / 1) * max_radius
+                r_max = (max(min(val_max, 1), 0.0) / 1) * max_radius
+                r_mean = (max(min(val_mean, 1), 0.0) / 1) * max_radius
                 
                 x_min = int(center[0] + r_min * np.cos(rad))
                 y_min = int(center[1] + r_min * np.sin(rad))
@@ -128,7 +128,7 @@ class Renderer:
         cv2.rectangle(img, (250, center[1] - r_h), (290, center[1]), self.primary_color, -1)
 
     def draw_grids(self, img, camera_data, is_live=True):
-        rows, cols = 120 // 16, 160 // 16
+        rows, cols = 120 // 20, 160 // 20
         cell_size = 210 // rows
         
         rf_start_x, rf_start_y = 520, 120
@@ -177,21 +177,22 @@ class Renderer:
                             rf_color = self.secondary_color
                         else:
                             rf_color = self.tertiary_color
+                    else:
+                        rf_color = self.neutral_gray
                             
-                        cv2.rectangle(img, (rf_x, rf_y), (rf_x + cell_size - 2, rf_y + cell_size - 2), rf_color, -1)
+                    cv2.rectangle(img, (rf_x, rf_y), (rf_x + cell_size - 2, rf_y + cell_size - 2), rf_color, -1)
 
                     # 2. Cone cells: per-channel variance checking
                     r_var_high = r_stat[1] > self.INVARIANT_THRESHOLD
                     g_var_high = g_stat[1] > self.INVARIANT_THRESHOLD
                     b_var_high = b_stat[1] > self.INVARIANT_THRESHOLD
 
-                    if (r_var_high and g_var_high and b_var_high): ## all variant
-                        cp_color = self.BG_COLOR
+                    if (r_var_high or g_var_high or b_var_high): ## one variant == color variant
+                        cp_color = self.neutral_gray
                     else:
-                        r_val = 0.0 if r_var_high else r_stat[0]
-                        g_val = 0.0 if g_var_high else g_stat[0]
-                        b_val = 0.0 if b_var_high else b_stat[0]
-
+                        r_val = r_stat[0]
+                        g_val = g_stat[0]
+                        b_val = b_stat[0]
                         if max(r_val, g_val, b_val) <= 1.0:
                             r_val, g_val, b_val = r_val * 255.0, g_val * 255.0, b_val * 255.0
 
@@ -220,8 +221,7 @@ class Renderer:
             positions[node] = (x, y)
 
         # Dynamic thickness scaling limits
-        min_thick = 1.5
-        max_thick = 2.5
+        thickness = 2
         counts = [edge.get("count", 1) for edge in edges]
         max_count = max(counts) if counts else 1
         min_count = min(counts) if counts else 1
@@ -238,85 +238,91 @@ class Renderer:
             pt1 = positions[source]
             pt2 = positions[target]
                     
-            # Calculate dynamic line thickness based on count
             if max_count == min_count:
-                thickness = min_thick
+                t = 1.0
             else:
-                normalized = (count - min_count) / (max_count - min_count)
-                thickness = int(min_thick + normalized * (max_thick - min_thick))
+                t = (count - min_count) / (max_count - min_count)
+            faint_color = tuple(int(0.85 * bg + 0.15 * pri) for bg, pri in zip(self.BG_COLOR, self.primary_color))
+            edge_color = tuple(int((1.0 - t) * faint_color[c] + t * self.primary_color[c]) for c in range(3))
 
             # Math to draw arrow exactly to the edge of the circle, not center
             dx, dy = pt2[0] - pt1[0], pt2[1] - pt1[1]
             dist = math.hypot(dx, dy)
-            if dist == 0:
-                # Arced self-loop above the node
-                loop_r = node_radius // 2
-                loop_center = (pt1[0], pt1[1] - node_radius - loop_r + 6)
 
-                # Draw arc looping clockwise from bottom-left over the top to bottom-right
+            if dist == 0:
+                # Loop geometry above and slightly right of the node
+                loop_r = int(node_radius * 0.7)
+                cx = pt1[0] + int(node_radius * 0.45)
+                cy = pt1[1] - int(node_radius * 0.95)
+
                 cv2.ellipse(
                     img,
-                    loop_center,
+                    (cx, cy),
                     (loop_r, loop_r),
                     0,
-                    120,
-                    400,
-                    self.primary_color,
+                    -10,
+                    225,
+                    edge_color,
                     thickness,
-                    lineType=cv2.LINE_AA,
+                    lineType=cv2.LINE_AA
                 )
 
-                # Arrowhead segment continuing tangent toward the node
-                tip_angle = math.radians(415)
-                prev_angle = math.radians(390)
-                pt_prev = (
-                    int(loop_center[0] + loop_r * math.cos(prev_angle)),
-                    int(loop_center[1] + loop_r * math.sin(prev_angle)),
-                )
-                pt_tip = (
-                    int(loop_center[0] + loop_r * math.cos(tip_angle)),
-                    int(loop_center[1] + loop_r * math.sin(tip_angle)),
-                )
+                target_angle = math.radians(125)
+                tip_x = int(pt1[0] + node_radius * math.cos(target_angle))
+                tip_y = int(pt1[1] - node_radius * math.sin(target_angle))
+
+                arrow_len = 16
+                start_x = int(tip_x - arrow_len * 0.5)
+                start_y = int(tip_y - arrow_len * 0.86)
 
                 cv2.arrowedLine(
                     img,
-                    pt_prev,
-                    pt_tip,
-                    self.primary_color,
+                    (start_x, start_y),
+                    (tip_x, tip_y),
+                    edge_color,
                     thickness,
-                    tipLength=0.6,
-                    line_type=cv2.LINE_AA,
+                    tipLength=0.55,
+                    line_type=cv2.LINE_AA
                 )
                 continue
-                    
+
             start_x = int(pt1[0] + (node_radius * dx / dist))
             start_y = int(pt1[1] + (node_radius * dy / dist))
             end_x = int(pt2[0] - (node_radius * dx / dist))
             end_y = int(pt2[1] - (node_radius * dy / dist))
 
-            # Dynamically adjust tipLength so arrowhead stays proportional to line thickness
-            tip_length = 0.06
-                    
             cv2.arrowedLine(
-                img, 
-                (start_x, start_y), 
-                (end_x, end_y), 
-                self.primary_color, 
-                thickness, 
-                tipLength=tip_length,
+                img,
+                (start_x, start_y),
+                (end_x, end_y),
+                edge_color,
+                thickness,
+                tipLength=0.08,
                 line_type=cv2.LINE_AA
             )
+                    
 
         # Draw Nodes (drawn after edges so edges don't overlap node circles)
         for node, (x, y) in positions.items():
             cv2.circle(img, (x, y), node_radius, self.tertiary_color, -1)
             cv2.circle(img, (x, y), node_radius, self.primary_color, 2)
                 
-            # Simple text wrap / centering logic
-            text_size = cv2.getTextSize(node, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)[0]
-            txt_x = x - text_size[0] // 2
-            txt_y = y + text_size[1] // 2
-            cv2.putText(img, node, (txt_x, txt_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.TEXT_MAIN, 1, cv2.LINE_AA)
+            # Dynamic text scaling to fit inside the node circle
+            max_text_width = int(node_radius * 1.7)  # Leave padding around the circle edges
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            thickness = 1
+            font_scale = 0.55
+
+            # Reduce font_scale until text width fits within the circle
+            (tw, th), baseline = cv2.getTextSize(node, font, font_scale, thickness)
+            while tw > max_text_width and font_scale > 0.2:
+                font_scale -= 0.03
+                (tw, th), baseline = cv2.getTextSize(node, font, font_scale, thickness)
+
+            # Center text inside the circle
+            txt_x = int(x - tw / 2)
+            txt_y = int(y + th / 2)
+            cv2.putText(img, node, (txt_x, txt_y), font, font_scale, self.TEXT_MAIN, thickness, cv2.LINE_AA)
 
     def draw_unified_GNG(self, img, G, node_colors, edge_colors, gng_colors):
         """Draws the unified topological GNG plane and legend onto the canvas."""
@@ -326,24 +332,62 @@ class Renderer:
         # Calculate 2D layout projection
         pos = nx.spring_layout(G, seed=42, k=0.25)
 
-        center_x, center_y = 500, 340
-        scale = 230
+        # 1. Determine raw bounding box of the layout
+        xs = [p[0] for p in pos.values()]
+        ys = [p[1] for p in pos.values()]
+        min_x, max_x = min(xs), max(xs)
+        min_y, max_y = min(ys), max(ys)
+        
+        raw_w = max_x - min_x if max_x > min_x else 1.0
+        raw_h = max_y - min_y if max_y > min_y else 1.0
 
-        # Draw edges
+        # 2. Determine maximum radius size in pixels to prevent clipping
+        max_r_px = max([max(int(G.nodes[n].get("radius", 0.0) * 35), 5) for n in G.nodes()], default=5)
+
+        # 3. Calculate dynamic scale and center offsets
+        pad_left = max_r_px + 30
+        pad_right = max_r_px + 200  # Extra padding on the right to avoid the legend
+        pad_y_top = max_r_px + 100  # Extra padding on top to avoid the title
+        pad_y_bot = max_r_px + 30
+        
+        avail_w = 1000 - (pad_left + pad_right)
+        avail_h = 620 - (pad_y_top + pad_y_bot)
+        
+        scale = min(avail_w / raw_w, avail_h / raw_h)
+        
+        center_x = pad_left + avail_w / 2 - ((min_x + max_x) / 2) * scale
+        center_y = pad_y_top + avail_h / 2 - ((min_y + max_y) / 2) * scale
+
+        # 1. Draw local radiuses (Covered Area)
+        for node in G.nodes():
+            pt = (int(center_x + pos[node][0] * scale), int(center_y + pos[node][1] * scale))
+            base_color = node_colors.get(node, self.neutral_gray)
+            
+            # Blend 75% background with 25% predicate color for a lighter shade
+            light_color = tuple(int(0.75 * bg + 0.25 * bc) for bg, bc in zip(self.BG_COLOR, base_color))
+            
+            # Fetch radius, default to 0 if missing, and scale it for the screen
+            r_val = G.nodes[node].get("radius", 0.0)
+            if r_val > 0:
+                # 35 is a visual scaling multiplier to make the radius readable on the 1000x620 canvas
+                r_px = max(int(r_val * 35), 5) 
+                cv2.circle(img, pt, r_px, light_color, -1, cv2.LINE_AA)
+
+        # 2. Draw edges
         for u, v in G.edges():
             pt1 = (int(center_x + pos[u][0] * scale), int(center_y + pos[u][1] * scale))
             pt2 = (int(center_x + pos[v][0] * scale), int(center_y + pos[v][1] * scale))
             color = edge_colors.get((u, v), self.neutral_gray)
             cv2.line(img, pt1, pt2, color, 1, cv2.LINE_AA)
 
-        # Draw nodes
+        # 3. Draw nodes
         for node in G.nodes():
             pt = (int(center_x + pos[node][0] * scale), int(center_y + pos[node][1] * scale))
             color = node_colors.get(node, self.neutral_gray)
             cv2.circle(img, pt, 5, color, -1, cv2.LINE_AA)
             cv2.circle(img, pt, 5, self.TEXT_MAIN, 1, cv2.LINE_AA)
 
-        # Draw legend
+        # 4. Draw legend
         legend_start_y = 120
         cv2.putText(img, "Predicates:", (820, legend_start_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.TEXT_MAIN, 1, cv2.LINE_AA)
         for i, (pred_name, color) in enumerate(gng_colors.items()):
@@ -423,11 +467,19 @@ class Renderer:
 # =============================================================================
 
 class PictureGenerator:
-    def __init__(self, logs_root="logs"):
+    def __init__(self, logs_root="logs", session_dir=None):
         self.logs_root = logs_root
+        self.session_dir = session_dir
         self.renderer = Renderer()
 
     def get_latest_session(self):
+        if self.session_dir:
+            if os.path.isabs(self.session_dir) or os.path.exists(self.session_dir):
+                return self.session_dir
+            candidate = os.path.join(self.logs_root, self.session_dir)
+            if os.path.exists(candidate):
+                return candidate
+
         if not os.path.exists(self.logs_root): return None
         session_dirs = [os.path.join(self.logs_root, d) for d in os.listdir(self.logs_root) if os.path.isdir(os.path.join(self.logs_root, d))]
         return max(session_dirs, key=os.path.basename) if session_dirs else None
@@ -488,8 +540,8 @@ class GNGPictureGenerator(PictureGenerator):
                 print(f"[PictureGenerator] Failed to process {json_path}: {e}")
 
 class UpdateFrequencyPictureGenerator(PictureGenerator):
-    def __init__(self, logs_root="logs", timestamp_file="timestamps.txt", bin_size_sec=60.0):
-        super().__init__(logs_root)
+    def __init__(self, logs_root="logs", session_dir=None, timestamp_file="timestamps.txt", bin_size_sec=60.0):
+        super().__init__(logs_root, session_dir=session_dir)
         self.timestamp_file = timestamp_file
         self.bin_size_sec = bin_size_sec
 
@@ -538,7 +590,7 @@ class TransGraphPictureGenerator(PictureGenerator):
             with open(json_path, 'r') as f:
                 graph_data = json.load(f)
                 
-            img = self.renderer.create_base_canvas("TRANSITION GRAPH MONITOR")
+            img = self.renderer.create_base_canvas("TRANSITION GRAPH")
             self.renderer.draw_transition_graph(img, graph_data)
 
             out_dir = self.get_pictures_dir()
@@ -552,8 +604,8 @@ class TransGraphPictureGenerator(PictureGenerator):
 
 
 class UnifiedGNGPictureGenerator(PictureGenerator):
-    def __init__(self, logs_root="logs"):
-        super().__init__(logs_root)
+    def __init__(self, logs_root="logs", session_dir=None):
+        super().__init__(logs_root, session_dir=session_dir)
         self.gng_colors = {}
         # Borrowing the distinct, vibrant BGR color palette from the live monitor
         self.color_palette = [
@@ -590,9 +642,15 @@ class UnifiedGNGPictureGenerator(PictureGenerator):
                 color = self._get_color(pred_name)
                 
                 nodes = data.get("nodes", [])
+                radiuses = data.get("local_radiuses", [])
+                
                 for i in range(len(nodes)):
                     node_id = f"{pred_name}_{i}"
-                    G.add_node(node_id)
+                    
+                    # Safely map the local radius to the node
+                    r_val = radiuses[i] if i < len(radiuses) else 0.0
+                    G.add_node(node_id, radius=r_val)
+                    
                     node_colors[node_id] = color
 
                 edges_dict = data.get("edges", {})
@@ -618,12 +676,13 @@ class UnifiedGNGPictureGenerator(PictureGenerator):
         print(f"[PictureGenerator] Saved Unified GNG plane to {out_path}")
 
 class PipelinePictureGenerator(PictureGenerator):
-    def __init__(self, logs_root="logs"):
+    def __init__(self, logs_root="logs", session_dir=None):
+        super().__init__(logs_root=logs_root, session_dir=session_dir)
         self.generators = [
-            GNGPictureGenerator(logs_root), 
-            TransGraphPictureGenerator(logs_root),
-            UnifiedGNGPictureGenerator(logs_root),
-            UpdateFrequencyPictureGenerator(logs_root)
+            GNGPictureGenerator(logs_root, session_dir=session_dir),
+            TransGraphPictureGenerator(logs_root, session_dir=session_dir),
+            UnifiedGNGPictureGenerator(logs_root, session_dir=session_dir),
+            UpdateFrequencyPictureGenerator(logs_root, session_dir=session_dir)
         ]
 
     def run(self):
@@ -685,7 +744,7 @@ class LiveSensimotorMonitor(Renderer):
             self._window_created = False
 
 class LiveUpdateFrequencyMonitor(Renderer):
-    def __init__(self, timestamp_path="timestamps.txt", bin_size_sec=60.0, poll_interval=1.0):
+    def __init__(self, timestamp_path="timestamps.txt", bin_size_sec=10.0, poll_interval=1.0):
         super().__init__()
         self.timestamp_path = timestamp_path
         self.bin_size_sec = bin_size_sec
@@ -878,9 +937,15 @@ class LiveGNGMonitor(Renderer):
                 color = self._get_color(pred_name)
                 
                 nodes = data.get("nodes", [])
+                radiuses = data.get("local_radiuses", [])
+                
                 for i in range(len(nodes)):
                     node_id = f"{pred_name}_{i}"
-                    G.add_node(node_id)
+                    
+                    # Safely map the local radius to the node
+                    r_val = radiuses[i] if i < len(radiuses) else 0.0
+                    G.add_node(node_id, radius=r_val)
+                    
                     node_colors[node_id] = color
 
                 edges_dict = data.get("edges", {})
@@ -896,7 +961,7 @@ class LiveGNGMonitor(Renderer):
 
         if len(G.nodes) == 0: return
 
-        img = self.create_base_canvas("LIVE GNG PLANE", "Topological state space mapping")
+        img = self.create_base_canvas("LIVE GNG PLANE")
         self.draw_unified_GNG(img, G, node_colors, edge_colors, self.gng_colors)
 
         cv2.imshow(self.window_name, img)
@@ -907,5 +972,7 @@ class LiveGNGMonitor(Renderer):
             self._window_created = False
 
 if __name__ == "__main__":
-    runner = PipelinePictureGenerator(logs_root="logs")
+    runner = PipelinePictureGenerator(logs_root="logs") #, session_dir="2026-09-10_19-07")
     runner.run()
+
+

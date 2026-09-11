@@ -1,12 +1,13 @@
 import os
 import json
+from tkinter import SEL
 import numpy as np
 
 from .predicate import Predicate
 
-class EdgeError(Exception):
-    # call closing of evething #TODO#
-    pass
+class FatalError(Exception):
+    def __init__(self, message):
+        super().__init__(message)
 
 class BrainNetwork:
     def __init__(self, log_dir=None):
@@ -38,7 +39,7 @@ class BrainNetwork:
                 elif operation == 'delete':
                     self.count -= 1
                 else:
-                    raise EdgeError(f"Unsupported operation: {operation}")
+                    raise FatalError(f"Unsupported operation: {operation}")
 
                 return self.count > 0
 
@@ -107,15 +108,15 @@ class BrainNetwork:
         self.trans_graph = Graph()
 
         # predicates as GNG - parameters
-        self.max_points = 100           # maxium of points in single GNG, if None then 2*dim
+        self.max_points = None          # maxium of points in single GNG, if None then 2*dim
         self.base_radius = 0.1          # radius around separated GNG node
-        self.max_radius = 1.0           # maximum local radius
-        self.learning_rate_b = 0.1      # Fraction to move the nearest node
-        self.learning_rate_n = 0.001    # Fraction to move topological neighbors
+        self.max_radius = None          # maximum local radius, if None then sqrt(dim)
+        self.learning_rate_b = 0.2      # Fraction to move the nearest node
+        self.learning_rate_n = 0.01     # Fraction to move topological neighbors
         self.max_edge_age = 10          # Maximum age of an edge before removal
-        self.lambda_step = 1            # Steps between node insertion
+        self.lambda_step = 5            # Steps between node insertion
         self.alpha = 0.5                # Error reduction during insertion
-        self.d = 0.999                  # Global error decay per step
+        self.d = 0.95                   # Global error decay per step
 
         # Logging Setup
         self.log_dir = log_dir
@@ -153,6 +154,8 @@ class BrainNetwork:
             self.state_dim = len(state_vector)
             if self.max_points is None:
                 self.max_points = self.state_dim * 2
+            if self.max_radius is None:
+                self.max_radius = self.state_dim ** (0.5)
 
         if skill_name not in self.trans_graph.nodes:
             return False # New predicate has no vectors 
@@ -168,6 +171,8 @@ class BrainNetwork:
             self.state_dim = len(vector)
             if self.max_points is None:
                 self.max_points = self.state_dim * 2
+            if self.max_radius is None:
+                self.max_radius = self.state_dim ** (0.5)
 
         active_skills = []
         for name, node in self.trans_graph.nodes.items():
@@ -188,13 +193,15 @@ class BrainNetwork:
         '''
         print(f"\t[Brain] Update Brain")
         for data in buffor:
-            prev_skill_name, prev_vector_state, skill_name, vector_state, succeed = data
+            prev_skill_name, prev_vector_state, prev_succeed, skill_name, vector_state, succeed = data
             
             # Dynamically initialize state_dim if this is the first data
             if self.state_dim is None:
                 self.state_dim = len(prev_vector_state)
-            if self.max_points is None:
-                self.max_points = self.state_dim * 2
+                if self.max_points is None:
+                    self.max_points = self.state_dim * 2
+                if self.max_radius is None:
+                    self.max_radius = self.state_dim ** (0.5)
 
             # Ensure the node exists
             if skill_name not in self.trans_graph.nodes:
@@ -206,8 +213,8 @@ class BrainNetwork:
             # -> update predicate
             self.trans_graph.update_predicate(skill_name, prev_vector_state, succeed)
             
-            # -> update edges
-            if succeed:
+            # -> update edges if previously we were within the node
+            if prev_succeed:
                 if not prev_skill_name == skill_name: # do not add self loops
                     self.trans_graph.add_edge(prev_skill_name, skill_name)
             else:
@@ -304,14 +311,74 @@ class BrainNetwork:
 
         if "nodes" in data:
             pred.nodes = [np.array(n) for n in data["nodes"]]
+            pred.errors = [0.0] * len(pred.nodes) 
+            
         if "edges" in data:
             parsed_edges = {}
             for k, v in data["edges"].items():
                 u, v_node = map(int, k.split(","))
                 parsed_edges[(u, v_node)] = v
             pred.edges = parsed_edges
+            
         return pred
 
+    def load_brain(self, source_dir):
+        '''
+        loads transgraph an all the predicates from given directory in 'logs'.
+        '''
+        print(f"\t[Brain] Loading brain from the files.")
+        if source_dir is None:
+            print(f"\t[Brain] No source directory.")
+            return
+        
+        if os.path.isdir(source_dir):
+            # 1. Define source paths
+            src_graphs_file = os.path.join(source_dir, "graphs", "trans_graph.json")
+            src_symbols_dir = os.path.join(source_dir, "PDDL", "symbols")
+            
+            # 2. Define target paths (directories are already created in __init__)
+            target_graphs_file = os.path.join(self.graphs_dir, "trans_graph.json")
+            target_symbols_dir = self.symbols_dir
+            
+            # 3. Copy trans_graph.json
+            if not os.path.exists(src_graphs_file):
+                print(f"\t[Brain] Could not find trans_graph.json in {source_dir}")
+                return
+                
+            with open(src_graphs_file, "r") as src_f, open(target_graphs_file, "w") as dst_f:
+                dst_f.write(src_f.read())
+                
+            # 4. Copy all symbol JSON files
+            if os.path.exists(src_symbols_dir):
+                for filename in os.listdir(src_symbols_dir):
+                    if filename.endswith(".json"):
+                        src_file = os.path.join(src_symbols_dir, filename)
+                        dst_file = os.path.join(target_symbols_dir, filename)
+                        with open(src_file, "r") as src_f, open(dst_file, "w") as dst_f:
+                            dst_f.write(src_f.read())
+
+            # 5. Load the graph data from the NEW target location
+            with open(target_graphs_file, "r") as f:
+                graph_data = json.load(f)
+                
+            # 6. Load nodes and their predicates from the NEW target location
+            for node_name in graph_data.get("nodes", []):
+                predicate_file = os.path.join(target_symbols_dir, f"{node_name}.json")
+                if os.path.exists(predicate_file):
+                    predicate = self.load_predicate(predicate_file)
+                    self._add_node(node_name, predicate, [])
+                else:
+                    print(f"\t[Brain] Warning: Missing predicate file for node {node_name}")
+            
+            # 7. Reconstruct edges and their counts
+            for edge in graph_data.get("edges", []):
+                source = edge.get("source")
+                target = edge.get("target")
+                count = edge.get("count", 1)
+                
+                for _ in range(count):
+                    self.trans_graph.add_edge(source, target)
+    
     def resolve_predicates(self, state_vector: np.ndarray) -> list:
         """
         Resolves a continuous state vector into active PDDL atomic propositions:
@@ -322,42 +389,49 @@ class BrainNetwork:
 
     def generate_domain_pddl(self, domain_name="world") -> str:
         """
-        Generates domain.pddl.
+        Generates domain.pddl using propositional logic for multi-target activation.
+        Fixed for strict parsers requiring :parameters ().
         """
         nodes = self.trans_graph.get_nodes_list()
         
         pddl = [
             f"(define (domain {domain_name})",
-            "  (:requirements :typing)",
-            "  (:types"
+            "  (:predicates"
         ]
         
-        # We must explicitly declare 'node' before making other types inherit from it!
-        if nodes:
-            pddl.append("    node")
-            types_str = " ".join([f"type_{n}" for n in nodes])
-            pddl.append(f"    {types_str} - node")
-        else:
-            pddl.append("    node")
+        # Generate a unique active predicate for every node
+        for n in nodes:
+            pddl.append(f"    (active_{n})")
             
-        pddl.extend([
-            "  )",
-            "  (:predicates",
-            "    (at ?n - node)",
-            "    (connected ?from - node ?to - node)",
-            "  )"
-        ])
+        pddl.append("  )")
         
-        # Actions restrict the ?to parameter to their strictly associated type
+        # Generate actions with hardcoded outgoing connections
         for node in nodes:
+            # 1. Find all nodes this specific node points to
+            outgoing_nodes = []
+            for target, sources in self.trans_graph.edges_by_target.items():
+                if node in sources and sources[node].count > 0:
+                    outgoing_nodes.append(target)
+            
             pddl.extend([
                 "",
                 f"  (:action {node}",
-                f"    :parameters (?from - node ?to - type_{node})",
-                "    :precondition (and (at ?from) (connected ?from ?to))",
-                "    :effect (and (not (at ?from)) (at ?to))",
-                "  )"
+                "    :parameters ()",  # <-- Added this line to satisfy Pyperplan
+                f"    :precondition (active_{node})"
             ])
+            
+            # 2. Build the effects: deactivate current (optional), activate all targets
+            effects = [f"(not (active_{node}))"] # Consumes the current active state
+            for out in outgoing_nodes:
+                effects.append(f"(active_{out})")
+                
+            if len(effects) == 1:
+                pddl.append(f"    :effect {effects[0]}")
+            else:
+                effects_str = " ".join(effects)
+                pddl.append(f"    :effect (and {effects_str})")
+                
+            pddl.append("  )")
             
         pddl.append(")")
         return "\n".join(pddl)
@@ -367,32 +441,19 @@ class BrainNetwork:
         """
         Generates problem.pddl.
         """
-        nodes = self.trans_graph.get_nodes_list()
-        
         pddl = [
             f"(define (problem {problem_name})",
             f"  (:domain {domain_name})",
-            "  (:objects"
+            "  (:init"
         ]
         
-        if nodes:
-            pddl.append("    " + " ".join([f"node_{n}" for n in nodes]) + " - node")
-        pddl.append("  )")
-        pddl.append("  (:init")
-        
-        # Starting point
-        if initial_state in nodes:
-            pddl.append(f"    (at node_{initial_state})")
+        # We only need to declare the initial active state
+        if initial_state:
+            pddl.append(f"    (active_{initial_state})")
             
-        # Draw the graph connections based on active edges
-        for target, sources in self.trans_graph.edges_by_target.items():
-            for source, edge in sources.items():
-                if edge.count > 0:
-                    pddl.append(f"    (connected node_{source} node_{target})")
-                    
-        pddl.append("  )")
+        pddl.append("  )") 
         pddl.append("  (:goal")
-        pddl.append(f"    (at node_{goal_state})")
+        pddl.append(f"    (active_{goal_state})")
         pddl.append("  )")
         pddl.append(")")
         

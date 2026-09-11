@@ -6,7 +6,7 @@ import pybullet as p
 class Arena(Object):
     def __init__(self):
         super().__init__()
-        self.model_name = "arena"
+        self.model_name = "arena_color"
         self.initial_position = [0, 0, 0]
         self.initial_orientation = [0, 0, 0, 1] 
 

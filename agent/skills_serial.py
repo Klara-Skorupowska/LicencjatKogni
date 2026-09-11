@@ -519,3 +519,29 @@ class Finish(SerialSkill):
             mssg += " Not facing the goal."
         print(f"\t[Skill] {self.__class__.__name__} failed.{mssg}")
         return False
+
+class Start(SerialSkill):
+    '''
+    Checks if it is in a room 1
+    '''
+    def __init__(
+        self,
+        bus: Communicator,
+        camera: CameraSensor, 
+        lidars: VirtualSensorArray, 
+        wheels: VirtualActuator, 
+        velocity: float, 
+        save_dist: float,
+        timeout: float = 15.0
+    ):
+        super().__init__(camera, lidars, wheels, velocity, save_dist, timeout)
+        self.bus = bus
+
+    def execute(self):
+        print(f"\t[Skill] Executing {self.__class__.__name__} skill.")
+        room = self.bus.call_service("/supervisor/ask/room_number")
+        if room == 1:
+            print(f"\t[Skill] {self.__class__.__name__} succeed. Ready to start")
+            return True
+        print(f"\t[Skill] {self.__class__.__name__} failed. Wrong room.")
+        return False

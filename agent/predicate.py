@@ -140,15 +140,16 @@ class Predicate():
                     self.edges[(0, 1)] = 0
             return
 
+            
+        self.update_count += 1
+
+        # 1. Find the two nearest nodes
+        dists = [np.linalg.norm(vector - n) for n in self.nodes]
+        sorted_idx = np.argsort(dists)
+        s1 = sorted_idx[0]
+        s2 = sorted_idx[1]
+
         if valence:
-            self.update_count += 1
-            
-            # 1. Find the two nearest nodes
-            dists = [np.linalg.norm(vector - n) for n in self.nodes]
-            sorted_idx = np.argsort(dists)
-            s1 = sorted_idx[0]
-            s2 = sorted_idx[1]
-            
             # 2. Increment ages of all edges connected to s1
             for (u, v) in list(self.edges.keys()):
                 if u == s1 or v == s1:
@@ -166,32 +167,38 @@ class Predicate():
                 
             # 5. Create or reset edge between s1 and s2
             self.edges[tuple(sorted((s1, s2)))] = 0
+                 
+        # standard GNG do not have this: everything in reverse for negative points within the radius
+        elif not valence and dists[s1] <= self._get_local_radius(s1): 
+            # 2. Decrement ages of all edges connected to s1
+            for (u, v) in list(self.edges.keys()):
+                if u == s1 or v == s1:
+                    self.edges[(u, v)] += - 1
+                    
+            # 3. Substract squared distance to s1's error
+            self.errors[s1] += - dists[s1] ** 2
             
-            # 6. Remove old edges and isolated nodes
-            self.tidy()
+            # 4. Move s1 and its topological neighbors from the vector
+            self.nodes[s1] += - self.eb * (vector - self.nodes[s1])
             
-            # 7. Insert new node periodically based on maximum error
-            if self.update_count % self.lambda_step == 0 and len(self.nodes) < self.max_points:
-                self._insert_node()
+            for (u, v) in self.edges.keys():
+                if u == s1: self.nodes[v] += - self.en * (vector - self.nodes[v])
+                elif v == s1: self.nodes[u] += - self.en * (vector - self.nodes[u])
                 
-            # 8. Global error decay
-            for i in range(len(self.errors)):
-                self.errors[i] *= self.d
-                
-        else:
-            # Non-standard: Repel nearest node if a false positive occurs
-            dists = [np.linalg.norm(vector - n) for n in self.nodes]
-            s1 = np.argmin(dists)
-            n1_dist = dists[s1]
-            local_radius = self._get_local_radius(s1)
+            # 5. Delete edge between s1 and s2
+            if tuple(sorted((s1, s2))) in self.edges:
+                del self.edges[tuple(sorted((s1, s2)))]
             
-            if n1_dist <= local_radius:
-                direction = self.nodes[s1] - vector
-                norm = np.linalg.norm(direction)
-                if norm > 0:
-                    direction /= norm
-                    push_dist = (local_radius - n1_dist) + (local_radius * 0.1) 
-                    self.nodes[s1] += direction * push_dist
+        # 6. Remove old edges and isolated nodes
+        self.tidy()
+            
+        # 7. Insert new node periodically based on maximum error
+        if self.update_count % self.lambda_step == 0 and len(self.nodes) < self.max_points:
+            self._insert_node()
+                
+        # 8. Global error decay
+        for i in range(len(self.errors)):
+            self.errors[i] *= self.d
 
     def compress(self, merge_ratio=0.5):
         """Compresses redundant states (custom utility adapted for updated lists)."""

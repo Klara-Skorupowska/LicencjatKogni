@@ -88,7 +88,7 @@ class CameraSensor(VirtualSensor):
         if self.frame is None:
             raise ValueError("No frame available. Please call read() before preprocess().")
 
-        # Ensure frame is 120x160 for the 20x20 grid mapping
+        # Ensure frame is 120x160 for the grid mapping
         h, w = self.frame.shape[:2]
         if h != 120 or w != 160:
             frame = cv2.resize(self.frame, (160, 120))
@@ -98,7 +98,7 @@ class CameraSensor(VirtualSensor):
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         
         # Grid dimensions:
-        patch_size = 16
+        patch_size = 20
         rows = 120 // patch_size  
         cols = 160 // patch_size  
 

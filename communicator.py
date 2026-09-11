@@ -1,12 +1,13 @@
-# a way to comunicate between real and virtual sensors and actuators
 import threading
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
 
 class Communicator:
     """Simulates ROS Topics and Services."""
-    def __init__(self):
+    def __init__(self, max_workers=10):
         self.topics = {}
         self.services = {}
         self.lock = threading.Lock()
+        self.executor = ThreadPoolExecutor(max_workers=max_workers)
 
     # --- Topics (Publish/Subscribe) ---
     def subscribe(self, topic, callback):
@@ -17,7 +18,7 @@ class Communicator:
 
     def publish(self, topic, data):
         with self.lock:
-            callbacks = self.topics.get(topic, [])
+            callbacks = list(self.topics.get(topic, []))
         for cb in callbacks:
             cb(data)
 
@@ -27,13 +28,20 @@ class Communicator:
         with self.lock:
             self.services[service_name] = handler_function
 
-    def call_service(self, service_name, request_data=None):
-        """Pauses the calling thread until the handler returns data."""
+    def call_service(self, service_name, request_data=None, timeout=10.0):
+        """
+        Calls the handler. If execution exceeds `timeout` (in seconds),
+        returns None instead of raising an exception.
+        """
         with self.lock:
             handler = self.services.get(service_name)
             
-        if handler:
-            # Execute the function and return its result
-            return handler(request_data)
-        else:
+        if not handler:
             raise ValueError(f"Service '{service_name}' not found!")
+
+        future = self.executor.submit(handler, request_data)
+        
+        try:
+            return future.result(timeout=timeout)
+        except TimeoutError:
+            return None

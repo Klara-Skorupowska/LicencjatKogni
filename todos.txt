@@ -10,7 +10,20 @@
 ()  - zrobione, a nie było planowane
 ---------------------------------------
 ---------------------------------------
-### 
+### 11.09.2026 ###
+[] zobaczyć ile startów mu potrzeba, żeby się nauczył. ODP.:
+[] dodaj arena_color.xacro do GITa
+
+### 10.09.2026 ###
+[o] dopisać do the agenta możliwość ładowania predykatów z plików, żeby móc testować co dalej (jako parametr przy inicjalizacji); 3 opcje: nowy, kontynuuj poprzedni, kontynuuj podany
+[o] cosik nie tak z planowaniem i zapisywaniem, bo nie ma danych wyjściowych dla stworzonych rozwiązań, dziwne -- złe tworzenie executable plan
+[o] przeanalizuj raz jeszcze logikę tworzenia GNG (negatywne punkty, usuwanie errora, krawędzi, co z krawędzią s1-s2)
+[o] zapisywanie jedynie planów zakończonych skucesem (przeniesienie plików z ogólnego folderu do takiego z nazwą próby)
+[x] rysunek GNGs: zlepić promienie i nody, żeby się po prostu pokrywały, a nie że się przeplatają -> jest dobrze jak jest
+
+### 09.09.2026 ###
+[o] krawędzie: przejrzeć bo nie działają - problem odnaleziony: sukces poprzedniej akcji oznacza, że jest przejście z niej do obecnej
+
 ### 07.09.2026 ###
 [o] do obrazków dodać GNG plane
 [o] generowanie PDDL
@@ -19,10 +32,10 @@
 [o] Obrazki: dla wszystkich lidarów min-max i średnia, kolory osobno liczyć ich wariancję, zmienne rzeczy w kolorze tła / przezroczyste, info z ilu punktów składa się ten predykat
 [x] zapisać timestamps updatów --> zapisuje ile było batchy i to idzie do statystyk
 [0] zapisać timestamps add_to_buffor --> zapisuje i rysuje histogram
-[] skillerror = close everything safely
+[] skillerror = close everything safetly
 
 ### 06.09.2026 ###
-[o] włożyć GNG do środka!!! I AM A GENIUS
+[o] włożyć GNG do środka !!! I AM A GENIUS
 
 ### 05.09.2026 ###
 [o] ._. start time: 05%09%2026 13%46%33 | end time: 05%09%2026 13%47%55 | duration: 00%01%22
@@ -34,10 +47,7 @@
 [o] poprawić reeptive field bo brzydko wygląda i nie widać jakie to intensywne: dwa pola: kolory i krawędzie
 
 ### 03.09.2026 ###
-[x] każdy symbol jest niezależny, co sprawia, że PDDL jest niepotrzebny, wystarczy sam trans graf. Trzeba dodać łączenie symboli. 
-	Porównać ich podobieństwo? nałożyć na siebie dublujące się części grafu? czyli de facto zagregować stany transgrafu. Jak?
-	przejść po grafie i jak wychodzą z niego dwie tożsame krawędzie, to je poprowadzić do jednego węzła. Nazwa lista node_id z których się składa. 
-	to jeszcze nie rozwiązuje problemu, ale już mamy pełniejszy graf. 
+[x] każdy symbol jest niezależny, co sprawia, że PDDL jest niepotrzebny, wystarczy sam trans graf. Trzeba dodać łączenie symboli. 	Porównać ich podobieństwo? nałożyć na siebie dublujące się części grafu? czyli de facto zagregować stany transgrafu. Jak? Przejść po grafie i jak wychodzą z niego dwie tożsame krawędzie, to je poprowadzić do jednego węzła. Nazwa lista node_id z których się składa. To jeszcze nie rozwiązuje problemu, ale już mamy pełniejszy graf. 
 [o] co n pętli głównych, robot restartuje.
 
 
