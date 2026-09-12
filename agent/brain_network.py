@@ -37,7 +37,7 @@ class BrainNetwork:
                 if operation == 'add':
                     self.count += 1
                 elif operation == 'delete':
-                    self.count -= 1
+                    self.count  = 0 # really delete += - 10 # much harder on the wrong points # or += -1 
                 else:
                     raise FatalError(f"Unsupported operation: {operation}")
 
@@ -214,11 +214,12 @@ class BrainNetwork:
             self.trans_graph.update_predicate(skill_name, prev_vector_state, succeed)
             
             # -> update edges if previously we were within the node
-            if prev_succeed:
-                if not prev_skill_name == skill_name: # do not add self loops
-                    self.trans_graph.add_edge(prev_skill_name, skill_name)
-            else:
-                self.trans_graph.delete_edge(prev_skill_name, skill_name)
+            if prev_succeed: # prev_succeed == this is not accidental
+                if succeed: # it put as in a good place
+                    if not prev_skill_name == skill_name: # do not add self loops
+                        self.trans_graph.add_edge(prev_skill_name, skill_name)
+                else: # it put as in a bad place
+                    self.trans_graph.delete_edge(prev_skill_name, skill_name)
             
 
         self._logger()

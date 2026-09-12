@@ -39,25 +39,7 @@
 			<mass value="0"/>
 			<inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
 		</inertial>
-		
-		<!-- Left Room Visual -->
-		<visual>
-			<origin xyz="-${floor_x/4} 0 -0.01"/>
-			<geometry>
-				<box size="${floor_x/2} ${floor_y} 0.02"/>
-			</geometry>
-			<material name="floor_left"/>
-		</visual>
-		
-		<!-- Right Room Visual -->
-		<visual>
-			<origin xyz="${floor_x/4} 0 -0.01"/>
-			<geometry>
-				<box size="${floor_x/2} ${floor_y} 0.02"/>
-			</geometry>
-			<material name="floor_right"/>
-		</visual>
-
+		<!-- Unified collision and physics remain here -->
 		<collision>
 			<origin xyz="0 0 -0.01"/>
 			<geometry>
@@ -68,6 +50,44 @@
 			<lateral_friction value="${floor_friction}"/>
 		</contact>
 	</link>
+
+	<!-- Left Room Visual Link -->
+	<link name="floor_left_visual">
+		<visual>
+			<origin xyz="-${floor_x/4} 0 -0.009"/>
+			<geometry>
+				<box size="${floor_x/2} ${floor_y} 0.02"/>
+			</geometry>
+			<material name="floor_left"/>
+		</visual>
+		<inertial>
+			<mass value="0"/>
+			<inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+		</inertial>
+	</link>
+	<joint name="floor_left_joint" type="fixed">
+		<parent link="floor"/>
+		<child link="floor_left_visual"/>
+	</joint>
+
+	<!-- Right Room Visual Link -->
+	<link name="floor_right_visual">
+		<visual>
+			<origin xyz="${floor_x/4} 0 -0.009"/>
+			<geometry>
+				<box size="${floor_x/2} ${floor_y} 0.02"/>
+			</geometry>
+			<material name="floor_right"/>
+		</visual>
+		<inertial>
+			<mass value="0"/>
+			<inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+		</inertial>
+	</link>
+	<joint name="floor_right_joint" type="fixed">
+		<parent link="floor"/>
+		<child link="floor_right_visual"/>
+	</joint>
 
 	<link name="end_column">
 		<inertial>

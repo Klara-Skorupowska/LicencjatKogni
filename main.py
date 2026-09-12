@@ -17,9 +17,11 @@ def main():
     print("Open communication")
     bus = Communicator()
     ### ---- CHOOSE PARAMETERS HERE ---- ###
-    session_dir = None #'continue'
+    session_dir = 'continue' # 'new' or 'continue' or <session dir>
+    runs = 1000
+    tests = 30
     ## agent ##
-    agent = TheAgent(bus, session_dir)
+    agent = TheAgent(bus, runs, tests, session_dir)
     ## simulation ##
     robot = RealRobot(bus)
     arena = Arena()

@@ -52,11 +52,11 @@ class SimpleAgent(Agent):
             duck, ang, dist = self.read_state()
             if duck:
                 if ang < 180: 
-                    self.wheels.set_value(10, -5)
+                    self.wheels.set_parameters([10, -5])
                 else:
-                    self.wheels.set_value(-5, 10)
+                    self.wheels.set_parameters([-5, 10])
             elif dist > 0.05:
-                self.wheels.set_value(10,10)
+                self.wheels.set_parameters([10,10])
 
             frame = self.cctv.read()
 

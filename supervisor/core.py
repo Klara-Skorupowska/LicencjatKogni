@@ -1,6 +1,7 @@
 import random
 from communicator import Communicator
 import numpy as np
+import math
 import pybullet as p
 import time
 
@@ -13,6 +14,7 @@ class Supervisor():
     def __init__(self, bus: Communicator):
         self.bus = bus
         self.robot_id = self.bus.call_service(f"/realrobot/give_id")
+        self.last_position = None
         self.arena_id = self.bus.call_service(f"/arena/give_id")
         
         self.bus.register_service(f"/supervisor/ask/room_number", self.which_room)
@@ -53,6 +55,17 @@ class Supervisor():
         else:
             return 2
 
+    def stuck_check(self):
+        position, _ = p.getBasePositionAndOrientation(self.robot_id)
+
+        if self.last_position is not None:
+            distance = math.dist(position, self.last_position)
+            if distance < 0.01:
+                self.bus.publish("/cmd/wheels", {"left": 0, "right": 0})
+                self.restart()
+        
+        self.last_position = position
+    
     def _joint_name_to_index(self, id):
         # Map all joint names to their indices
         joint_name_to_index = {}
@@ -63,45 +76,37 @@ class Supervisor():
         return joint_name_to_index
 
     def door_zone(self, request=None):
-        # robot position
+        # Robot position
         position, _ = p.getBasePositionAndOrientation(self.robot_id)
-        pos_robot = np.array(position[:2])
+        x = position[0]
+        y = position[1]
 
-        # door position (hinge)
-        pos_door = [0, -0.1]
-        
+        # Doorway center position 
+        # Based on your previous logic, the door spans from y = -0.1 to y = 0.1
+        door_x = 0.0
+        door_y_center = 0.0
+    
         # Zone Configuration
-        door_y_min = pos_door[1]           # -0.1
-        door_y_max = pos_door[1] + 0.2     # 0.1
-        door_x = pos_door[0]               # 0
-        
-        top_width = 0.2    # Width at the doorway
-        bottom_width = 0.4 # Width at the far edge
-        height = 0.5       # Depth the trapezoid extends into the room
-        
-        y = pos_robot[1]
-        x = pos_robot[0]
-        
-        # 1. Calculate how far the robot is from the doorway edges (depth into the room)
-        dy = 0
-        if y > door_y_max:
-            dy = y - door_y_max
-        elif y < door_y_min:
-            dy = door_y_min - y
-            
-        # 2. If the depth exceeds the trapezoid height, it's outside the zone
-        if dy > height:
+        top_width = 0.2    # Width along the wall at the doorway (y = -0.1 to 0.1)
+        bottom_width = 0.4 # Width along the wall at the far edge
+        depth = 0.25       # How far the trapezoid extends into the rooms (along X)
+    
+        # 1. Calculate how far the robot is from the doorway (depth into the room)
+        dx = abs(x - door_x)
+    
+        # 2. If the depth exceeds the configured max depth, it's outside the zone
+        if dx > depth:
             return False
-            
-        # 3. Calculate the maximum allowed X width at this specific depth
-        # It expands linearly from top_width to bottom_width as dy goes from 0 to height
-        current_width = top_width + (bottom_width - top_width) * (dy / height)
-        max_allowed_dx = current_width / 2.0
         
-        # 4. Check if the robot's X is within this allowed width
-        if abs(x - door_x) <= max_allowed_dx:
+        # 3. Calculate the maximum allowed Y width at this specific depth
+        # It expands linearly from top_width to bottom_width as dx goes from 0 to depth
+        current_width = top_width + (bottom_width - top_width) * (dx / depth)
+        max_allowed_dy = current_width / 2.0
+    
+        # 4. Check if the robot's Y is within this allowed width along the wall
+        if abs(y - door_y_center) <= max_allowed_dy:
             return True
-            
+        
         return False
 
     def goal_zone(self, request=None):
@@ -119,7 +124,7 @@ class Supervisor():
         pos_door = link_state[0] 
 
         # the distance
-        max_dist = 0.25
+        max_dist = 0.15
         x_dist = abs(pos_door[0] - pos_robot[0])
         y_dist = abs(pos_door[1] - pos_robot[1])
         dist = (x_dist**2+y_dist**2)**(1/2)
@@ -130,7 +135,7 @@ class Supervisor():
         print("[Supervisor] Robot in environment reset.")
         # Reset robot position
         _, orientation = self.bus.call_service(f"/realrobot/give_initial_position")
-        x_pos = random.uniform(-0.45, -0.05)
+        x_pos = random.uniform(-0.45, -0.25)
         y_pos = random.uniform(-0.45, 0.45)
         position = [x_pos, y_pos, 0.05]
         p.resetBasePositionAndOrientation(self.robot_id, position, orientation)

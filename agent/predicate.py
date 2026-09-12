@@ -21,37 +21,53 @@ class Predicate():
         self.nodes = []                   # Holds the valid vectors
         self.errors = []                  # Holds accumulated error for each node
         self.edges = {}                   # dict of tuple(node_i, node_j) -> age
+        self.adj = {}                     # dict of int -> set of neighbor node indices
 
         self.update_count = 0
 
+    def _add_edge(self, u, v, age=0):
+        """Adds or resets an edge and updates the adjacency map."""
+        self.edges[tuple(sorted((u, v)))] = age
+        self.adj.setdefault(u, set()).add(v)
+        self.adj.setdefault(v, set()).add(u)
+
+    def _remove_edge(self, u, v):
+        """Removes an edge and updates the adjacency map."""
+        edge = tuple(sorted((u, v)))
+        if edge in self.edges:
+            del self.edges[edge]
+        if u in self.adj and v in self.adj[u]:
+            self.adj[u].remove(v)
+        if v in self.adj and u in self.adj[v]:
+            self.adj[v].remove(u)
+        
     def _get_local_radius(self, node_idx):
-        """
-        Calculates the local bounded Voronoi radius for a node based on 
-        the distance to its connected topological neighbors.
-        """
-        neighbors = []
-        for (u, v) in self.edges.keys():
-            if u == node_idx:
-                neighbors.append(v)
-            elif v == node_idx:
-                neighbors.append(u)
-                
+        neighbors = self.adj.get(node_idx, set())
         if not neighbors:
             return self.base_radius
             
         dists = [np.linalg.norm(self.nodes[node_idx] - self.nodes[n]) for n in neighbors]
-        return min(max(dists), self.max_radius)
+        raw_radius = 0.5 * min(dists)
+        return float(np.clip(raw_radius, self.base_radius, self.max_radius))
 
     def is_active(self, vector):
         """Check if a vector falls within the network's bounded Voronoi volume."""
         if not self.nodes:
             return False
-        dists = [np.linalg.norm(vector - n) for n in self.nodes]
-        n1_idx = np.argmin(dists)
-        n1_dist = dists[n1_idx]
         
+        vec = np.asarray(vector)
+        nodes_mat = np.asarray(self.nodes)
+    
+        if vec.shape[-1] != nodes_mat.shape[-1]:
+            raise ValueError(f"Vector dimension {vec.shape[-1]} does not match node dimension {nodes_mat.shape[-1]}.")
+
+        # Vectorized Euclidean distance calculation across all nodes
+        dists = np.linalg.norm(nodes_mat - vec, axis=1)
+        n1_idx = int(np.argmin(dists))
+        n1_dist = dists[n1_idx]
+    
         local_radius = self._get_local_radius(n1_idx)
-        return n1_dist <= local_radius
+        return bool(n1_dist <= local_radius)
 
     def _insert_node(self):
         """Standard GNG node insertion based on accumulated topological error."""
@@ -62,11 +78,7 @@ class Predicate():
         q = np.argmax(self.errors)
         
         # 2. Find neighbor f of q with max error
-        neighbors = []
-        for (u, v) in self.edges.keys():
-            if u == q: neighbors.append(v)
-            elif v == q: neighbors.append(u)
-            
+        neighbors = list(self.adj.get(q, set()))
         if not neighbors:
             return
             
@@ -75,16 +87,13 @@ class Predicate():
         # 3. Insert r halfway between q and f
         r_pos = 0.5 * (self.nodes[q] + self.nodes[f])
         self.nodes.append(r_pos)
-        self.errors.append(0.0) # Will be overwritten below
+        self.errors.append(0.0)
         r = len(self.nodes) - 1
         
         # 4. Remove edge (q, f) and insert (q, r), (f, r)
-        edge_qf = tuple(sorted((q, f)))
-        if edge_qf in self.edges:
-            del self.edges[edge_qf]
-            
-        self.edges[tuple(sorted((q, r)))] = 0
-        self.edges[tuple(sorted((f, r)))] = 0
+        self._remove_edge(q, f)
+        self._add_edge(q, r, age=0)
+        self._add_edge(f, r, age=0)
         
         # 5. Decrease errors of q and f, set error of r
         self.errors[q] *= self.alpha
@@ -124,6 +133,12 @@ class Predicate():
                     new_edges[tuple(sorted((idx_map[u], idx_map[v])))] = age
             self.edges = new_edges
 
+        # Rebuild self.adj cleanly from the active edges
+        self.adj = {}
+        for u, v in self.edges.keys():
+            self.adj.setdefault(u, set()).add(v)
+            self.adj.setdefault(v, set()).add(u)
+
     def update(self, vector, valence: bool = True):
         """
         Standard GNG iteration for positive valence. 
@@ -137,7 +152,7 @@ class Predicate():
                 self.nodes.append(vector)
                 self.errors.append(0.0)
                 if len(self.nodes) == 2:
-                    self.edges[(0, 1)] = 0
+                    self._add_edge(0, 1, age=0)
             return
 
             
@@ -150,44 +165,43 @@ class Predicate():
         s2 = sorted_idx[1]
 
         if valence:
-            # 2. Increment ages of all edges connected to s1
+            # 2. A. Increment ages of all edges connected to s1
             for (u, v) in list(self.edges.keys()):
                 if u == s1 or v == s1:
                     self.edges[(u, v)] += 1
                     
-            # 3. Add squared distance to s1's error
+            # 3. A. Add squared distance to s1's error
             self.errors[s1] += dists[s1] ** 2
             
-            # 4. Move s1 and its topological neighbors towards the vector
+            # 4. A. Move s1 and its topological neighbors towards the vector
             self.nodes[s1] += self.eb * (vector - self.nodes[s1])
             
             for (u, v) in self.edges.keys():
                 if u == s1: self.nodes[v] += self.en * (vector - self.nodes[v])
                 elif v == s1: self.nodes[u] += self.en * (vector - self.nodes[u])
                 
-            # 5. Create or reset edge between s1 and s2
-            self.edges[tuple(sorted((s1, s2)))] = 0
+            # 5. A. Create or reset edge between s1 and s2
+            self._add_edge(s1, s2, age=0)
                  
         # standard GNG do not have this: everything in reverse for negative points within the radius
         elif not valence and dists[s1] <= self._get_local_radius(s1): 
-            # 2. Decrement ages of all edges connected to s1
+            # 2. B. Decrement ages of all edges connected to s1
             for (u, v) in list(self.edges.keys()):
                 if u == s1 or v == s1:
                     self.edges[(u, v)] += - 1
                     
-            # 3. Substract squared distance to s1's error
+            # 3. B. Substract squared distance to s1's error
             self.errors[s1] += - dists[s1] ** 2
             
-            # 4. Move s1 and its topological neighbors from the vector
+            # 4. B. Move s1 and its topological neighbors from the vector
             self.nodes[s1] += - self.eb * (vector - self.nodes[s1])
             
             for (u, v) in self.edges.keys():
                 if u == s1: self.nodes[v] += - self.en * (vector - self.nodes[v])
                 elif v == s1: self.nodes[u] += - self.en * (vector - self.nodes[u])
                 
-            # 5. Delete edge between s1 and s2
-            if tuple(sorted((s1, s2))) in self.edges:
-                del self.edges[tuple(sorted((s1, s2)))]
+            # 5. B. Delete edge between s1 and s2
+            self._remove_edge(s1, s2)
             
         # 6. Remove old edges and isolated nodes
         self.tidy()

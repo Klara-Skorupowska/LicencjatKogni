@@ -24,17 +24,20 @@ class TheAgent(Agent):
             self.name = skill_name
             self.succeed = succeed
 
-    def __init__(self, bus: Communicator, source_dir = None):
+    def __init__(self, bus: Communicator, how_many_runs: int, how_many_tests: int, source_dir = 'new'):
         super().__init__(bus)
         self.wheels = WheelsActuator(self.bus)
         self.lidars = VirtualSensorArray(self.bus, [LidarSensor(self.bus, ang) for ang in [17, 50, 90, 150, 210, 270, 310, 343]])
         self.camera = CameraSensor(self.bus)
         
-        self.max_runs = 2000     # how many explore actions
-        self.N_tests = 100       # how many starts from different positions with ready predicates
+        self.max_runs = how_many_runs       # how many explore actions
+        self.N_tests = how_many_tests       # how many starts from different positions with ready predicates
 
         self.fail_buffor = []
         self.buffor_max_len = 10 
+
+        self.current_skill = None
+        self.bus.register_service('agent/ask/action', self._give_current_action)
 
         save_dist = 0.05
         velocity = 15
@@ -43,9 +46,9 @@ class TheAgent(Agent):
             'Find_the_Door': SpotTheColor(60, self.camera, self.lidars, self.wheels, velocity, save_dist, timeout=4.0),
             'Aproach_the_Door': GoToTheDoor(bus, 60, self.camera, self.lidars, self.wheels, velocity, save_dist=save_dist, timeout=15.0),
             'Open_the_Door': GoThroughTheDoor(bus, self.camera, self.lidars, self.wheels, velocity, save_dist, timeout=10.0),
-            'Find_the_Goal': SpotTheColor(120, self.camera, self.lidars, self.wheels, velocity, save_dist, timeout=4.0),
-            'Aproach_the_Goal': GoToTheGoal(bus, 120, self.camera, self.lidars, self.wheels, velocity, save_dist=save_dist, timeout=15.0),
-            'Finish': Finish(bus, 120, self.camera, self.lidars, self.wheels, velocity, save_dist=save_dist, timeout=1.0)
+            'Find_the_Goal': SpotTheColor(26, self.camera, self.lidars, self.wheels, velocity, save_dist, timeout=4.0),
+            'Aproach_the_Goal': GoToTheGoal(bus, 26, self.camera, self.lidars, self.wheels, velocity, save_dist=save_dist, timeout=15.0),
+            'Finish': Finish(bus, 26, self.camera, self.lidars, self.wheels, velocity, save_dist=save_dist, timeout=1.0)
         }
         
         # 1. Directory Structure Setup
@@ -54,7 +57,7 @@ class TheAgent(Agent):
         self.continued_from = None
         resolved_source_dir = None
         
-        if source_dir is None:
+        if source_dir == 'new':
             pass
         elif source_dir == 'continue':
             resolved_source_dir = self._get_latest_session("logs")
@@ -87,6 +90,9 @@ class TheAgent(Agent):
         self.run_count = 0
         self.batch_update_count = 0
         self.timestamps = []
+
+    def _give_current_action(self, request=None):
+        return self.current_skill
 
     def _get_latest_session(self, logs_root):
         target_dir = None
@@ -194,6 +200,7 @@ class TheAgent(Agent):
                
     def execute_skill(self, skill_name, prev_skill):
         print(f"[Agent] Execute Skill")
+        self.current_skill = skill_name
         #-> read state
         prev_vector_state = self.read_state()
         #-> if there is not node for the skill, add one
@@ -243,7 +250,7 @@ class TheAgent(Agent):
     def explore(self, prev_skill):
         print("[Agent] Explore")
         #-> choose random action (not checking the finish)
-        available_skills = [k for k in self.skillset if k not in ["Finish", "Start"]]
+        available_skills = [k for k in self.skillset if k != "Finish"]
         if not available_skills:
             return None
         skill_name = random.choice(available_skills)
@@ -349,12 +356,15 @@ class TheAgent(Agent):
                 )
                 if matched_skill:
                     executable_plan.append(matched_skill) 
-        if len(executable_plan)==0:
+        if len(executable_plan)<=0:
             print(f"[Agent] Error: no executable plan.")
         else:
+            executable_plan.append(goal_skill)
             # move executable plan to not temporary folder
+            '''
             exec_plan_dir = os.path.join(self.pddl_dir, f"plan_{self.run_count}")
             os.rename(plan_dir, exec_plan_dir)
+            '''
         return executable_plan, start_skill, goal_skill
 
     def  test_run(self):
@@ -372,22 +382,26 @@ class TheAgent(Agent):
                 result = False
             else:
                 result = True
+                print(f"[Agent] Executing plan: {plan}")
                 for step, skill_name in enumerate(plan):
                     print(f"[Agent] Executing step {step}/{len(plan)}: {skill_name}")
                     prev_vector_state = self.read_state()
                     preconditions_are_met = self.brain.preconditions_met(skill_name, prev_vector_state)
                     if not preconditions_are_met:
-                        steps_executed = step - 1
+                        print(f"[Agent] Preconditions are not met: {skill_name}")
+                        steps_executed = step
                         result = False
                         break
                     skill = self.skillset[skill_name]
                     succeed = skill.execute()
                     last_step = skill_name
-                    steps_executed = step
+                    steps_executed = step + 1
+                    '''
+                    # check from supervisor
                     if not succeed:
                         result = False
                         break
-
+                    '''
             duration = time.time() - start 
             self.tests.append((i, len(plan), steps_executed, last_step, duration, result))
             if result:

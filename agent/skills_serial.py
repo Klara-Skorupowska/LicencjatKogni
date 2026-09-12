@@ -69,7 +69,7 @@ class SpotTheColor(SerialSkill):
         class_name = self.__class__.__name__
         print(f"\t[Skill] Executing {class_name} skill. Hue: {self.hue}.")
 
-        hue_tol = 25
+        hue_tol = 5
         lower_hue = (self.hue - hue_tol)%180
         higher_hue = (self.hue + hue_tol)%180
         if lower_hue > higher_hue:
@@ -207,8 +207,8 @@ class GoToTheColor(SerialSkill):
         wheels, 
         velocity: float, 
         save_dist: float, 
-        target_distance: float = 0.06,
-        distance_tolerance: float = 0.01,
+        target_distance: float = 0.05,
+        distance_tolerance: float = 0.005,
         timeout: float = 15.0
     ):
         super().__init__(camera, lidars, wheels, velocity, save_dist, timeout)
@@ -217,7 +217,7 @@ class GoToTheColor(SerialSkill):
         self.target_distance = target_distance
         self.distance_tolerance = distance_tolerance
         self.center_tolerance = 10
-        self.hue_tolerance = 25
+        self.hue_tolerance = 5
 
 
     def _get_color_x_center(self, frame):
@@ -387,7 +387,7 @@ class GoThroughTheDoor(SerialSkill):
             room = self.bus.call_service(f"/supervisor/ask/room_number")
             zone = self.bus.call_service(f"/supervisor/ask/door_zone")
             # calculations
-            open_space = min(distances) > self.save_dist
+            open_space = min(distances) >= self.save_dist
             # logic
             if not room == init_room and not zone and open_space:
                 self.wheels.set_parameters([0.0, 0.0])
@@ -456,7 +456,7 @@ class Finish(SerialSkill):
         print(f"\t[Skill] Executing {self.__class__.__name__} skill.")
         in_goal_zone = self.bus.call_service("/supervisor/ask/goal_zone")
         facing_goal = False
-        hue_tol = 25
+        hue_tol = 5
 
         frame, _ = self.read_sensors()
         if frame is None:
@@ -541,7 +541,7 @@ class Start(SerialSkill):
         print(f"\t[Skill] Executing {self.__class__.__name__} skill.")
         room = self.bus.call_service("/supervisor/ask/room_number")
         if room == 1:
-            print(f"\t[Skill] {self.__class__.__name__} succeed. Ready to start")
+            print(f"\t[Skill] {self.__class__.__name__} succeed.")
             return True
         print(f"\t[Skill] {self.__class__.__name__} failed. Wrong room.")
         return False

@@ -10,9 +10,15 @@
 ()  - zrobione, a nie było planowane
 ---------------------------------------
 ---------------------------------------
+
+### 11.09.2026 ###
+[] ogarnij skille, znów
+[] dodaj debugline pybullet żeby widzieć gdzie jest jaka strefa
+
 ### 11.09.2026 ###
 [] zobaczyć ile startów mu potrzeba, żeby się nauczył. ODP.:
-[] dodaj arena_color.xacro do GITa
+[o] dodaj arena_color.xacro do GITa
+[o] podczas testowania: sukces akcji oceniaj spełnieniem efektu (symbole), a nie odgórnie
 
 ### 10.09.2026 ###
 [o] dopisać do the agenta możliwość ładowania predykatów z plików, żeby móc testować co dalej (jako parametr przy inicjalizacji); 3 opcje: nowy, kontynuuj poprzedni, kontynuuj podany

@@ -7,6 +7,7 @@ import numpy as np
 import math
 from communicator import Communicator
 import networkx as nx
+import textwrap
 
 # =============================================================================
 # SHARED RENDERERS & UTILS
@@ -29,8 +30,94 @@ class Renderer:
         
         self.neutral_gray = (130, 135, 140)
         self.LIDAR_ANGLES = [17, 50, 90, 150, 210, 270, 310, 343]
-        self.INVARIANT_THRESHOLD = 0.1
+        self.INVARIANT_THRESHOLD = 0.005
 
+    def compute_hue_stats(self, r_vals, g_vals, b_vals):
+        """
+        Converts RGB vectors to Hue (0 to 2pi) and computes circular mean and variance.
+        Returns:
+            mean_rgb_tuple: (B, G, R) color corresponding to the mean hue (full saturation & value)
+            circ_var: Circular variance in range [0, 1]
+        """
+        # Ensure values are in float [0, 1]
+        max_v = max(np.max(r_vals), np.max(g_vals), np.max(b_vals))
+        if max_v > 1.0:
+            r = np.array(r_vals, dtype=np.float32) / 255.0
+            g = np.array(g_vals, dtype=np.float32) / 255.0
+            b = np.array(b_vals, dtype=np.float32) / 255.0
+        else:
+            r = np.array(r_vals, dtype=np.float32)
+            g = np.array(g_vals, dtype=np.float32)
+            b = np.array(b_vals, dtype=np.float32)
+
+        # Standard RGB to Hue conversion
+        cmax = np.maximum(np.maximum(r, g), b)
+        cmin = np.minimum(np.minimum(r, g), b)
+        delta = cmax - cmin
+
+        h = np.zeros_like(r)
+        nonzero = delta > 1e-6
+
+        # Red is max
+        mask = nonzero & (cmax == r)
+        h[mask] = (60.0 * (((g[mask] - b[mask]) / delta[mask]) % 6))
+
+        # Green is max
+        mask = nonzero & (cmax == g)
+        h[mask] = (60.0 * (((b[mask] - r[mask]) / delta[mask]) + 2))
+
+        # Blue is max
+        mask = nonzero & (cmax == b)
+        h[mask] = (60.0 * (((r[mask] - g[mask]) / delta[mask]) + 4))
+
+        # Convert degrees [0, 360) to radians [0, 2pi)
+        angles = np.deg2rad(h)
+
+        # Directional statistics: mean resultant vector
+        sin_mean = np.mean(np.sin(angles))
+        cos_mean = np.mean(np.cos(angles))
+        R = np.hypot(sin_mean, cos_mean)
+        circ_var = 1.0 - R  # 0: perfectly invariant, 1: completely dispersed
+
+        mean_angle_deg = (np.rad2deg(np.arctan2(sin_mean, cos_mean)) + 360.0) % 360.0
+
+        # Convert mean hue back to pure BGR color (OpenCV H: 0-179, S: 255, V: 255)
+        hsv_pixel = np.uint8([[[int(mean_angle_deg / 2.0), 255, 255]]])
+        bgr_pixel = cv2.cvtColor(hsv_pixel, cv2.COLOR_HSV2BGR)[0][0]
+        mean_bgr = (int(bgr_pixel[0]), int(bgr_pixel[1]), int(bgr_pixel[2]))
+
+        return mean_bgr, circ_var
+
+    def _rgb_to_hue_bgr(self, r, g, b):
+        """
+        Converts RGB values [0.0, 1.0] to a pure Hue color in BGR format.
+        Preserves grayscale/achromatic pixels if saturation is near zero.
+        """
+        # Clamp inputs
+        r_c = np.clip(float(r), 0.0, 1.0)
+        g_c = np.clip(float(g), 0.0, 1.0)
+        b_c = np.clip(float(b), 0.0, 1.0)
+
+        # Handle grayscale/achromatic pixels where Hue is undefined
+        max_c = max(r_c, g_c, b_c)
+        min_c = min(r_c, g_c, b_c)
+        delta = max_c - min_c
+
+        # If low saturation (e.g. gray, white, dark road), preserve the neutral luminance
+        if max_c < 0.05 or (delta / max_c) < 0.15:
+            val = int(max_c * 255)
+            return (val, val, val)
+
+        # Convert uint8 RGB -> HSV -> BGR so OpenCV handles ranges consistently
+        rgb_u8 = np.array([[[int(r_c * 255), int(g_c * 255), int(b_c * 255)]]], dtype=np.uint8)
+        hsv = cv2.cvtColor(rgb_u8, cv2.COLOR_RGB2HSV)
+        h = hsv[0, 0, 0]  # OpenCV uint8 Hue is naturally in [0, 179]
+
+        # Full saturation and brightness for pure Hue representation
+        pure_hsv = np.array([[[h, 255, 255]]], dtype=np.uint8)
+        pure_bgr = cv2.cvtColor(pure_hsv, cv2.COLOR_HSV2BGR)[0, 0]
+        return (int(pure_bgr[0]), int(pure_bgr[1]), int(pure_bgr[2]))
+    
     def draw_sample_badge(self, img, n_points, position=(830, 48)):
         """Draws a badge indicating the number of sample points used."""
         text = f"N = {n_points} samples"
@@ -163,10 +250,13 @@ class Renderer:
                     cv2.rectangle(img, (rf_x, rf_y), (rf_x + cell_size - 2, rf_y + cell_size - 2), rf_color, -1)
                     cv2.rectangle(img, (cp_x, cp_y), (cp_x + cell_size - 2, cp_y + cell_size - 2), cp_color, -1)
                 else:
-                    # Expects 5 stats tuples: (mean, var)
-                    on_stat, off_stat, r_stat, g_stat, b_stat = camera_data[idx: idx + 5]
+                    ganglion_stats, cone_hue_stats = camera_data
+                    cell_num = r * cols + c
                     
-                    # 1. Ganglion cell: skip drawing (transparent) if variance is too high
+                    on_stat = ganglion_stats[idx]
+                    off_stat = ganglion_stats[idx + 1]
+
+                    # 1. Ganglion cell (check ON/OFF invariance)
                     if on_stat[1] <= self.INVARIANT_THRESHOLD and off_stat[1] <= self.INVARIANT_THRESHOLD:
                         on_bool = on_stat[0] > 0.5
                         off_bool = off_stat[0] > 0.5
@@ -177,27 +267,20 @@ class Renderer:
                             rf_color = self.secondary_color
                         else:
                             rf_color = self.tertiary_color
+                        
+                        cv2.rectangle(img, (rf_x, rf_y), (rf_x + cell_size - 2, rf_y + cell_size - 2), rf_color, -1)
                     else:
-                        rf_color = self.neutral_gray
-                            
-                    cv2.rectangle(img, (rf_x, rf_y), (rf_x + cell_size - 2, rf_y + cell_size - 2), rf_color, -1)
+                        cv2.rectangle(img, (rf_x, rf_y), (rf_x + cell_size - 2, rf_y + cell_size - 2), self.PANEL_BORDER, 1)
 
-                    # 2. Cone cells: per-channel variance checking
-                    r_var_high = r_stat[1] > self.INVARIANT_THRESHOLD
-                    g_var_high = g_stat[1] > self.INVARIANT_THRESHOLD
-                    b_var_high = b_stat[1] > self.INVARIANT_THRESHOLD
+                    # 2. Cone cells: Hue circular variance checking and mean hue rendering
+                    mean_bgr, hue_circ_var = cone_hue_stats[cell_num]
 
-                    if (r_var_high or g_var_high or b_var_high): ## one variant == color variant
-                        cp_color = self.neutral_gray
+                    if hue_circ_var <= self.INVARIANT_THRESHOLD:
+                        # Fill with the reconstructed mean hue color
+                        cv2.rectangle(img, (cp_x, cp_y), (cp_x + cell_size - 2, cp_y + cell_size - 2), mean_bgr, -1)
                     else:
-                        r_val = r_stat[0]
-                        g_val = g_stat[0]
-                        b_val = b_stat[0]
-                        if max(r_val, g_val, b_val) <= 1.0:
-                            r_val, g_val, b_val = r_val * 255.0, g_val * 255.0, b_val * 255.0
-
-                        cp_color = (int(np.clip(b_val, 0, 255)), int(np.clip(g_val, 0, 255)), int(np.clip(r_val, 0, 255)))
-                    cv2.rectangle(img, (cp_x, cp_y), (cp_x + cell_size - 2, cp_y + cell_size - 2), cp_color, -1)
+                        # Hollow border if the hue varies significantly
+                        cv2.rectangle(img, (cp_x, cp_y), (cp_x + cell_size - 2, cp_y + cell_size - 2), self.PANEL_BORDER, 1)
 
     def draw_transition_graph(self, img, graph_data):
         """Draws the transition graph directly onto the OpenCV image canvas."""
@@ -209,16 +292,28 @@ class Renderer:
             return
 
         center = (500, 350)
-        radius = 220
         node_radius = 50
-        positions = {}
+        
+        # 1. Build a NetworkX Directed Graph specifically for the layout algorithm
+        import networkx as nx
+        G = nx.DiGraph()
+        G.add_nodes_from(nodes)
+        for edge_info in edges:
+            source = edge_info.get("source")
+            target = edge_info.get("target")
+            count = edge_info.get("count", 1)
             
-        # Circular Layout
-        angle_step = 2 * math.pi / len(nodes)
-        for i, node in enumerate(nodes):
-            x = int(center[0] + radius * math.cos(i * angle_step))
-            y = int(center[1] + radius * math.sin(i * angle_step))
-            positions[node] = (x, y)
+            # Using count as weight naturally pulls frequently transitioning nodes closer
+            if source in nodes and target in nodes:
+                G.add_edge(source, target, weight=count)
+                
+        # 2. Compute Force-Directed / Spring Layout
+        # 'k' controls the optimal distance between nodes. Increasing it forces more spacing.
+        optimal_dist = node_radius / math.sqrt(max(len(nodes), 1)) 
+        raw_pos = nx.spring_layout(G, k=optimal_dist, center=center, scale=220, seed=42)
+        
+        # 3. Convert float coordinates to integer pixels for OpenCV
+        positions = {node: (int(coords[0]), int(coords[1])) for node, coords in raw_pos.items()}
 
         # Dynamic thickness scaling limits
         thickness = 2
@@ -250,40 +345,6 @@ class Renderer:
             dist = math.hypot(dx, dy)
 
             if dist == 0:
-                # Loop geometry above and slightly right of the node
-                loop_r = int(node_radius * 0.7)
-                cx = pt1[0] + int(node_radius * 0.45)
-                cy = pt1[1] - int(node_radius * 0.95)
-
-                cv2.ellipse(
-                    img,
-                    (cx, cy),
-                    (loop_r, loop_r),
-                    0,
-                    -10,
-                    225,
-                    edge_color,
-                    thickness,
-                    lineType=cv2.LINE_AA
-                )
-
-                target_angle = math.radians(125)
-                tip_x = int(pt1[0] + node_radius * math.cos(target_angle))
-                tip_y = int(pt1[1] - node_radius * math.sin(target_angle))
-
-                arrow_len = 16
-                start_x = int(tip_x - arrow_len * 0.5)
-                start_y = int(tip_y - arrow_len * 0.86)
-
-                cv2.arrowedLine(
-                    img,
-                    (start_x, start_y),
-                    (tip_x, tip_y),
-                    edge_color,
-                    thickness,
-                    tipLength=0.55,
-                    line_type=cv2.LINE_AA
-                )
                 continue
 
             start_x = int(pt1[0] + (node_radius * dx / dist))
@@ -291,15 +352,61 @@ class Renderer:
             end_x = int(pt2[0] - (node_radius * dx / dist))
             end_y = int(pt2[1] - (node_radius * dy / dist))
 
-            cv2.arrowedLine(
-                img,
-                (start_x, start_y),
-                (end_x, end_y),
-                edge_color,
-                thickness,
-                tipLength=0.08,
-                line_type=cv2.LINE_AA
-            )
+            # Set up points for the Bezier curve
+            P1 = np.array([start_x, start_y], dtype=float)
+            P2 = np.array([end_x, end_y], dtype=float)
+            
+            gap_dx = P2[0] - P1[0]
+            gap_dy = P2[1] - P1[1]
+            gap_dist = math.hypot(gap_dx, gap_dy)
+            
+            if gap_dist > 0:
+                M = (P1 + P2) / 2.0
+                
+                # Normal vector perpendicular to the edge direction
+                nx = -gap_dy / gap_dist
+                ny = gap_dx / gap_dist
+                
+                # Push the control point out dynamically (15% of the edge length)
+                curve_offset = gap_dist * 0.2  
+                C = M + np.array([nx, ny]) * curve_offset
+                
+                # Generate 20 points along the quadratic Bezier curve
+                t = np.linspace(0, 1, 20).reshape(-1, 1)
+                curve_pts = ((1 - t)**2 * P1 + 2 * (1 - t) * t * C + t**2 * P2).astype(np.int32)
+                
+                # Draw the curved line
+                cv2.polylines(
+                    img, 
+                    [curve_pts], 
+                    isClosed=False, 
+                    color=edge_color, 
+                    thickness=thickness, 
+                    lineType=cv2.LINE_AA
+                )
+                
+                # Calculate the tangent at the end of the curve for the arrowhead
+                tx = P2[0] - C[0]
+                ty = P2[1] - C[1]
+                t_len = math.hypot(tx, ty)
+                
+                if t_len > 0:
+                    tx /= t_len
+                    ty /= t_len
+                    
+                    # Create an artificial starting point 20 pixels back to draw a consistent arrow
+                    arrow_start = (int(P2[0] - tx * 20), int(P2[1] - ty * 20))
+                    arrow_end = (int(P2[0]), int(P2[1]))
+                    
+                    cv2.arrowedLine(
+                        img,
+                        arrow_start,
+                        arrow_end,
+                        edge_color,
+                        thickness,
+                        tipLength=0.4,
+                        line_type=cv2.LINE_AA
+                    )
                     
 
         # Draw Nodes (drawn after edges so edges don't overlap node circles)
@@ -307,22 +414,30 @@ class Renderer:
             cv2.circle(img, (x, y), node_radius, self.tertiary_color, -1)
             cv2.circle(img, (x, y), node_radius, self.primary_color, 2)
                 
-            # Dynamic text scaling to fit inside the node circle
-            max_text_width = int(node_radius * 1.7)  # Leave padding around the circle edges
+            # Replace underscores and wrap text to fit inside the circle width
+            display_name = node.replace('_', ' ')
+            wrapped_lines = textwrap.wrap(display_name, width=10)
+            
             font = cv2.FONT_HERSHEY_SIMPLEX
+            font_scale = 0.42
             thickness = 1
-            font_scale = 0.55
-
-            # Reduce font_scale until text width fits within the circle
-            (tw, th), baseline = cv2.getTextSize(node, font, font_scale, thickness)
-            while tw > max_text_width and font_scale > 0.2:
-                font_scale -= 0.03
-                (tw, th), baseline = cv2.getTextSize(node, font, font_scale, thickness)
-
-            # Center text inside the circle
-            txt_x = int(x - tw / 2)
-            txt_y = int(y + th / 2)
-            cv2.putText(img, node, (txt_x, txt_y), font, font_scale, self.TEXT_MAIN, thickness, cv2.LINE_AA)
+            
+            # Measure all lines to calculate total text block height
+            line_metrics = []
+            for line in wrapped_lines:
+                (tw, th), baseline = cv2.getTextSize(line, font, font_scale, thickness)
+                line_metrics.append((line, tw, th, baseline))
+                
+            total_height = sum(th + baseline for _, _, th, baseline in line_metrics) + max(0, len(wrapped_lines) - 1) * 3
+            
+            # Center the multi-line text block vertically and horizontally inside the circle
+            current_y = y - total_height // 2
+            
+            for line, tw, th, baseline in line_metrics:
+                txt_x = int(x - tw / 2)
+                txt_y = int(current_y + th)
+                cv2.putText(img, line, (txt_x, txt_y), font, font_scale, self.TEXT_MAIN, thickness, cv2.LINE_AA)
+                current_y += th + baseline + 3
 
     def draw_unified_GNG(self, img, G, node_colors, edge_colors, gng_colors):
         """Draws the unified topological GNG plane and legend onto the canvas."""
@@ -517,15 +632,29 @@ class GNGPictureGenerator(PictureGenerator):
                 var_vals = np.var(nodes, axis=0)
                 
                 file_base = os.path.splitext(os.path.basename(json_path))[0]
-                img = self.renderer.create_base_canvas(f"GNG INVARIANTS: {file_base}")
+                display_title = file_base.replace("_", " ")
+                img = self.renderer.create_base_canvas(f"GNG INVARIANTS: {display_title}")
                 
                 # Pass min, max, and mean for all lidar directions
                 lidar_data = list(zip(min_vals[:8], max_vals[:8], mean_vals[:8]))
                 self.renderer.draw_lidar(img, lidar_data, is_live=False)
                 
                 # Pass mean and separate per-channel variance for Ganglion and Cone grids
-                camera_data = list(zip(mean_vals[8:], var_vals[8:]))
-                self.renderer.draw_grids(img, camera_data, is_live=False)
+                # Ganglion cells stats (mean, var)
+                ganglion_stats = list(zip(mean_vals[8:], var_vals[8:]))
+
+                # Compute Hue stats across sample nodes for each cone cell (48 cells total: 6x8)
+                cone_hue_stats = []
+                for cell_idx in range(6 * 8):
+                    offset = 8 + (cell_idx * 5)
+                    r_samples = nodes[:, offset + 2]
+                    g_samples = nodes[:, offset + 3]
+                    b_samples = nodes[:, offset + 4]
+                    mean_bgr, hue_var = self.renderer.compute_hue_stats(r_samples, g_samples, b_samples)
+                    cone_hue_stats.append((mean_bgr, hue_var))
+
+                # Pass ganglion stats and hue stats into draw_grids
+                self.renderer.draw_grids(img, (ganglion_stats, cone_hue_stats), is_live=False)
 
                 # Overlay bottom-left badge showing sample point count
                 self.renderer.draw_sample_badge(img, n_points=len(nodes))
@@ -538,6 +667,65 @@ class GNGPictureGenerator(PictureGenerator):
                 print(f"[PictureGenerator] Saved GNG invariants to {out_path}")
             except Exception as e:
                 print(f"[PictureGenerator] Failed to process {json_path}: {e}")
+
+class RepresentativePointPictureGenerator(PictureGenerator):
+    """Generates a static sensimotor visualization of the representative medoid point for each symbol JSON."""
+
+    def run(self):
+        latest_session = self.get_latest_session()
+        if not latest_session:
+            return
+
+        symbols_dir = os.path.join(latest_session, "PDDL", "symbols")
+        if not os.path.exists(symbols_dir):
+            return
+
+        out_dir = self.get_pictures_dir()
+        if not out_dir:
+            return
+
+        for json_path in glob.glob(os.path.join(symbols_dir, "*.json")):
+            try:
+                with open(json_path, "r") as f:
+                    data = json.load(f)
+
+                nodes = np.array(data.get("nodes", []))
+                if len(nodes) == 0:
+                    continue
+
+                # Compute medoid (node closest to the centroid)
+                centroid = np.mean(nodes, axis=0)
+                dists = np.linalg.norm(nodes - centroid, axis=1)
+                rep_idx = int(np.argmin(dists))
+                rep_node = nodes[rep_idx]
+
+                file_base = os.path.splitext(os.path.basename(json_path))[0]
+                display_title = file_base.replace("_", " ")
+                img = self.renderer.create_base_canvas(
+                    f"REPRESENTATIVE POINT: {display_title}",
+                    f"Medoid Node index {rep_idx} out of {len(nodes)} points",
+                )
+
+                # Draw LIDAR (dimensions 0:8)
+                lidar_data = rep_node[:8]
+                self.renderer.draw_lidar(img, lidar_data, is_live=True)
+
+                # Draw Vision Grids (dimensions 8:248)
+                cam_data = rep_node[8:248]
+                self.renderer.draw_grids(img, cam_data, is_live=True)
+
+                self.renderer.draw_sample_badge(img, n_points=len(nodes))
+
+                out_path = os.path.join(out_dir, f"{file_base}_rep_point.png")
+                cv2.imwrite(out_path, img)
+                print(
+                    f"[Picture Generator] Saved image to {out_path}"
+                )
+
+            except Exception as e:
+                print(
+                    f"[Picture Generator] Error processing {json_path}: {e}"
+                )
 
 class UpdateFrequencyPictureGenerator(PictureGenerator):
     def __init__(self, logs_root="logs", session_dir=None, timestamp_file="timestamps.txt", bin_size_sec=60.0):
@@ -682,7 +870,8 @@ class PipelinePictureGenerator(PictureGenerator):
             GNGPictureGenerator(logs_root, session_dir=session_dir),
             TransGraphPictureGenerator(logs_root, session_dir=session_dir),
             UnifiedGNGPictureGenerator(logs_root, session_dir=session_dir),
-            UpdateFrequencyPictureGenerator(logs_root, session_dir=session_dir)
+            UpdateFrequencyPictureGenerator(logs_root, session_dir=session_dir),
+            RepresentativePointPictureGenerator(logs_root, session_dir=session_dir)
         ]
 
     def run(self):
@@ -849,8 +1038,6 @@ class LiveGraphMonitor(Renderer):
             cv2.destroyWindow(self.trans_window)
             self._window_created = False
 
-import networkx as nx
-
 class LiveGNGMonitor(Renderer):
     def __init__(self, logs_root="logs", poll_interval=1.0):
         super().__init__()
@@ -965,6 +1152,101 @@ class LiveGNGMonitor(Renderer):
         self.draw_unified_GNG(img, G, node_colors, edge_colors, self.gng_colors)
 
         cv2.imshow(self.window_name, img)
+
+    def close(self):
+        if self._window_created:
+            cv2.destroyWindow(self.window_name)
+            self._window_created = False
+
+class LiveRepresentativePointMonitor(Renderer):
+    """Monitors PDDL symbol JSON files in the latest session and displays the
+
+    representative medoid point for the current active action.
+    """
+
+    def __init__(self, bus, logs_root="logs"):
+        super().__init__()
+        self.bus = bus
+        self.logs_root = logs_root
+        self.window_name = "Live Representative Point Monitor"
+        self._window_created = False
+
+    def get_latest_session(self):
+        if not os.path.exists(self.logs_root):
+            return None
+        session_dirs = [
+            os.path.join(self.logs_root, d)
+            for d in os.listdir(self.logs_root)
+            if os.path.isdir(os.path.join(self.logs_root, d))
+        ]
+        return max(session_dirs, key=os.path.basename) if session_dirs else None
+
+    def _ensure_window(self):
+        if not self._window_created:
+            cv2.namedWindow(self.window_name, cv2.WINDOW_AUTOSIZE)
+            placeholder = self.create_base_canvas(
+                "LIVE REPRESENTATIVE POINT", "Waiting for symbol data..."
+            )
+            cv2.imshow(self.window_name, placeholder)
+            self._window_created = True
+
+    def _resolve_action_name(self):
+        try:
+            res = self.bus.call_service("agent/ask/action")
+            if isinstance(res, dict):
+                return res.get("action") or res.get("name")
+            return res
+        except Exception as e:
+            print(f"[LiveRepresentativePointMonitor] Failed to query action service: {e}")
+            return None
+
+    def update(self):
+        self._ensure_window()
+        cv2.waitKey(1)
+
+        action_name = self._resolve_action_name()
+        if not action_name:
+            return
+
+        latest_session = self.get_latest_session()
+        if not latest_session:
+            return
+
+        action_file = os.path.join(
+            latest_session, "PDDL", "symbols", f"{action_name}.json"
+        )
+        if not os.path.isfile(action_file):
+            return
+
+        try:
+            with open(action_file, "r") as f:
+                data = json.load(f)
+
+            nodes = np.array(data.get("nodes", []))
+            if len(nodes) == 0:
+                return
+
+            # Compute medoid
+            centroid = np.mean(nodes, axis=0)
+            dists = np.linalg.norm(nodes - centroid, axis=1)
+            rep_idx = int(np.argmin(dists))
+            rep_node = nodes[rep_idx]
+
+            display_title = str(action_name).replace("_", " ")
+            img = self.create_base_canvas(
+                f"REPRESENTATIVE POINT: {display_title}",
+                f"Node {rep_idx} of {len(nodes)} (Medoid)",
+            )
+
+            # Dimensions 0:8 for LIDAR and 8:248 for Retinal Ganglion + Cone Cells
+            self.draw_lidar(img, rep_node[:8], is_live=True)
+            self.draw_grids(img, rep_node[8:248], is_live=True)
+            self.draw_sample_badge(img, n_points=len(nodes))
+
+            cv2.imshow(self.window_name, img)
+
+        except Exception as e:
+            print(f"[LiveRepresentativePointMonitor] Error rendering point: {e}")
 
     def close(self):
         if self._window_created:

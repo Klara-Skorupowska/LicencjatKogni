@@ -1,3 +1,4 @@
 The ideas to go forward with this project.
-* from all senses in one to individual senses by finding independant states
-* save some of successfull data, and reanact it after update to network, maybe they're good/bad this time
+* from all senses in one to individual senses by finding independent states
+* save some of not surprising data, and look at it after update to network, maybe they're good/bad this time
+* he needs some kind of memory, to be able to do sequential things without all the info in the environment

@@ -1,0 +1,113 @@
+{
+    "nodes": [
+        "Start",
+        "Finish",
+        "Find_the_Door",
+        "Open_the_Door",
+        "Aproach_the_Door",
+        "Find_the_Goal",
+        "Aproach_the_Goal"
+    ],
+    "edges": [
+        {
+            "source": "Aproach_the_Goal",
+            "target": "Start",
+            "count": 6
+        },
+        {
+            "source": "Find_the_Door",
+            "target": "Start",
+            "count": 4
+        },
+        {
+            "source": "Open_the_Door",
+            "target": "Start",
+            "count": 1
+        },
+        {
+            "source": "Aproach_the_Goal",
+            "target": "Finish",
+            "count": 37
+        },
+        {
+            "source": "Find_the_Goal",
+            "target": "Finish",
+            "count": 1
+        },
+        {
+            "source": "Start",
+            "target": "Find_the_Door",
+            "count": 206
+        },
+        {
+            "source": "Open_the_Door",
+            "target": "Find_the_Door",
+            "count": 16
+        },
+        {
+            "source": "Aproach_the_Door",
+            "target": "Find_the_Door",
+            "count": 16
+        },
+        {
+            "source": "Find_the_Goal",
+            "target": "Find_the_Door",
+            "count": 28
+        },
+        {
+            "source": "Aproach_the_Goal",
+            "target": "Find_the_Door",
+            "count": 4
+        },
+        {
+            "source": "Aproach_the_Door",
+            "target": "Open_the_Door",
+            "count": 12
+        },
+        {
+            "source": "Start",
+            "target": "Open_the_Door",
+            "count": 8
+        },
+        {
+            "source": "Find_the_Door",
+            "target": "Open_the_Door",
+            "count": 5
+        },
+        {
+            "source": "Aproach_the_Goal",
+            "target": "Aproach_the_Door",
+            "count": 8
+        },
+        {
+            "source": "Start",
+            "target": "Aproach_the_Door",
+            "count": 27
+        },
+        {
+            "source": "Find_the_Door",
+            "target": "Aproach_the_Door",
+            "count": 25
+        },
+        {
+            "source": "Open_the_Door",
+            "target": "Aproach_the_Door",
+            "count": 1
+        },
+        {
+            "source": "Open_the_Door",
+            "target": "Find_the_Goal",
+            "count": 15
+        },
+        {
+            "source": "Find_the_Door",
+            "target": "Find_the_Goal",
+            "count": 11
+        },
+        {
+            "source": "Find_the_Goal",
+            "target": "Aproach_the_Goal",
+            "count": 31
+        }
+    ]
+}

@@ -11,18 +11,23 @@ def supervisor_loop(bus: Communicator, setup_complete_event: threading.Event, st
     # status boards
     # colectiong data
     time_step = 1.0 / 5.0
+    stuck_check_time_step = 5 # sec
     god = Supervisor(bus)
     god.setup()
-    monitors = [LiveGraphMonitor(), LiveSensimotorMonitor(bus), LiveGNGMonitor()]
+    monitors = [LiveGraphMonitor(), LiveSensimotorMonitor(bus), LiveGNGMonitor(), LiveRepresentativePointMonitor(bus)]
     print("[Supervisor] Loaded.")
     setup_complete_event.set() 
     
     try:
+        i = 0
         while not stop_event.is_set():
+            i+=1
             # updating statusboards and saving continuous data
             for monitor in monitors:
                 if stop_event.is_set(): break
                 monitor.update()
+            if i%(1/time_step*stuck_check_time_step) == 0:
+                god.stuck_check()
             time.sleep(time_step)
 
     except KeyboardInterrupt:
