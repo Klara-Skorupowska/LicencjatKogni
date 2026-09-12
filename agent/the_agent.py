@@ -230,16 +230,15 @@ class TheAgent(Agent):
         #-> read state
         prev_vector_state = self.read_state()
         #-> if there is not node for the skill, add one
-        self.brain.create_node(skill_name)
+        self.brain.add_action(skill_name)
         #-> Are preconditions of this skill met?
-        preconditions_are_met = self.brain.preconditions_met(skill_name, prev_vector_state)
+        preconditions_are_met = self.brain.actions[skill_name].preconditions_met(prev_vector_state)
         #-> execute the skill
         skill = self.skillset[skill_name]
         succeed = skill.execute()
-        #-> update edges
-        self.brain.update_transition(prev_skill.name, skill_name, prev_skill.succeed, succeed)
+        vector_state = self.read_state()
         #-> Is the outcome expectable? expectable = preconditions are met and success OR preconditions are not met and fail
-        data = (prev_vector_state, skill_name, succeed)
+        data = (prev_vector_state, skill_name, vector_state, succeed)
         expectable = ( preconditions_are_met and succeed ) or (not preconditions_are_met and not succeed)
         if not expectable:
             #-> add to buffor
@@ -303,77 +302,83 @@ class TheAgent(Agent):
         self.timestamps += [time.time()]
 
 
-    def generate_plan(self, start_skill = None, goal_skill = None):
+    def generate_plan(self, start_skill=None, goal_skill=None):
         print("[Agent] Generate Plan")
-        #-> read state
+        
+        # 1. Konidaris Stage: Induce symbols & overlap graph from trained GNGs
+        self.brain.create_predicates()
+        
+        # 2. Read continuous state and resolve which actions can run right now
         vector_state = self.read_state()
-        #-> get active skills: by resolving predicates, which skills are doable right now
-        if start_skill is None or goal_skill is None:
-            active_skills = self.brain.get_active_skills(vector_state)
-            if not active_skills: # if no active skills (nodes), no plan at all
-                print(f"[Agent] No active skills.")
-                return [], None, None 
-            print(f"[Agent] Active predicates: {active_skills}")
-            #-> choose the starting skill from active ones
-            if start_skill is None:
-                start_skill = random.choice(active_skills)
-            #-> choose the goal from nodes in the transgraph
-            if goal_skill is None:
-                nodes = self.brain.get_nodes()
-                nodes =  [n for n in nodes if n != start_skill]
-                if not nodes:
-                    print(f"[Agent] No nodes in transitional graph.")
-                    return [], None, None
-                goal_skill = random.choice(nodes)
+        active_actions = self.brain.get_active_skills(vector_state)
+        
+        if not active_actions:
+            print("[Agent] No active skills (continuous state outside all initiation sets).")
+            return [], None, None
+            
+        active_action_names = [a.name for a in active_actions]
+        print(f"[Agent] Active initial skills: {active_action_names}")
+
+        # Choose start skill from currently applicable options
+        if start_skill is None:
+            start_skill = random.choice(active_action_names)
+            
+        # Select target skill from known actions
+        if goal_skill is None:
+            candidate_goals = [name for name in self.brain.actions.keys() if name != start_skill]
+            if not candidate_goals:
+                print("[Agent] No alternative skills registered to serve as goal.")
+                return [], None, None
+            goal_skill = random.choice(candidate_goals)
 
         print(f"[Agent] Generating plan from {start_skill} to {goal_skill}.")
 
-        # the paths
-        plan_dir = os.path.join(self.pddl_dir, f"newest")
+        # 3. Setup paths for PDDL serialization
+        plan_dir = os.path.join(self.pddl_dir, "newest")
         os.makedirs(plan_dir, exist_ok=True)
-        domain_file = os.path.join(plan_dir, f"domain.pddl")
-        problem_file = os.path.join(plan_dir, f"problem.pddl")
-        plan_file = os.path.join(plan_dir, f"problem.pddl.soln")
+        domain_file = os.path.join(plan_dir, "domain.pddl")
+        problem_file = os.path.join(plan_dir, "problem.pddl")
+        plan_file = os.path.join(plan_dir, "problem.pddl.soln")
 
-        #-> generate domain.pddl
+        # 4. Generate STRIPS PDDL grounded on the continuous state
         domain_str = self.brain.generate_domain_pddl()
         with open(domain_file, "w") as f:
             f.write(domain_str)
-        #-> generate problem.pddl
-        problem_str = self.brain.generate_problem_pddl(initial_state=start_skill, goal_state=goal_skill)
+
+        problem_str = self.brain.generate_problem_pddl(
+            current_vector=vector_state, 
+            target_skill=goal_skill
+        )
         with open(problem_file, "w") as f:
             f.write(problem_str)
-        #-> run solver
-        if not os.path.exists(domain_file) or not os.path.exists(problem_file):
-            print(f"[Agent] Error: no .pddl files")
-            return [], None, None
 
+        # 5. Run symbolic planner
         if os.path.exists(plan_file):
             os.remove(plan_file)
 
         try:
-            res = subprocess.run(
+            subprocess.run(
                 [sys.executable, "-m", "pyperplan", "-s", "astar", "-H", "hff", domain_file, problem_file],
                 capture_output=True, text=True, check=True,
-                timeout=10.0  # Prevents hanging when no plan exists
+                timeout=10.0
             )
         except subprocess.TimeoutExpired:
-            print(f"[Agent] Pyperplan timed out (no plan reachable).")
-            self.logs += [f"[Pyperplan] [RUN {self.run_count}]  Pyperplan timed out."]
+            print("[Agent] Pyperplan timed out (goal unreachable).")
+            if hasattr(self, "logs"):
+                self.logs.append(f"[Pyperplan] [RUN {self.run_count}] Timed out.")
             return [], None, None
         except subprocess.CalledProcessError as e:
-            # Catches Pyperplan failing (e.g., syntax errors, unable to solve)
-            print(f"[Agent] Pyperplan error: {e.stderr or e.stdout}")
+            print(f"[Agent] Pyperplan failed to solve: {e.stderr or e.stdout}")
             return [], None, None
         except Exception as e:
-            # Catches literally any other unexpected error (e.g., OS errors, missing modules)
-            print(f"[Agent] Unexpected error running Pyperplan: {e}")
+            print(f"[Agent] Unexpected error executing planner: {e}")
             return [], None, None
 
         if not os.path.exists(plan_file):
+            print("[Agent] No solution file was produced.")
             return [], None, None
 
-        #-> change to executable plan
+        # 6. Parse the solution file into the executable skill pipeline
         executable_plan = []
         with open(plan_file, "r") as f:
             for line in f:
@@ -382,26 +387,22 @@ class TheAgent(Agent):
                     continue 
 
                 parts = line.strip("()").split()
-                if len(parts) < 1:
+                if not parts:
                     continue
             
                 action_name_lower = parts[0].lower()
-
                 matched_skill = next(
                     (sk for sk in self.skillset.keys() if sk.lower() == action_name_lower), 
                     None
                 )
                 if matched_skill:
-                    executable_plan.append(matched_skill) 
-        if len(executable_plan)<=0:
-            print(f"[Agent] Error: no executable plan.")
-        else:
-            executable_plan.append(goal_skill)
-            # move executable plan to not temporary folder
-            '''
-            exec_plan_dir = os.path.join(self.pddl_dir, f"plan_{self.run_count}")
-            os.rename(plan_dir, exec_plan_dir)
-            '''
+                    executable_plan.append(matched_skill)
+
+        if not executable_plan:
+            print("[Agent] Error: Planner returned an empty or unmapped plan.")
+            return [], None, None
+
+        print(f"[Agent] Found executable plan: {' -> '.join(executable_plan)}")
         return executable_plan, start_skill, goal_skill
 
     def  test_run(self):

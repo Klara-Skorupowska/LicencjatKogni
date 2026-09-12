@@ -11,7 +11,12 @@
 ---------------------------------------
 ---------------------------------------
 ### 12.09.2026 ###
-	móstwo robię na bieżąco
+	móstwo robię na bieżąco, ale właśnie znalazłam basic problem :(
+[] transgraph jest nie potrzebny :( Wygenerowanie efektów wymaga zestawinia parami niezmienników wszystkich akcji i zobaczenia które się pokrywają. Trzeba zbierać dla każdej akcji przed i po. więcej GNG :)
+[] dodać parowanie init / eff
+[] dodać updatowanie mózgu int i eff
+[] ZROBIĆ TO JESZCZE RAZ ALE TYM RAZEM DOBRZE :|
+
 
 ### 11.09.2026 ###
 [o] ogarnij skille, znów

@@ -14,7 +14,7 @@ def supervisor_loop(bus: Communicator, setup_complete_event: threading.Event, st
     stuck_check_time_step = 5 # sec
     god = Supervisor(bus)
     god.setup()
-    monitors = [LiveGraphMonitor(), LiveSensimotorMonitor(bus), LiveGNGMonitor(), LiveRepresentativePointMonitor(bus)]
+    monitors = [LivePDDLMovesMonitor(), LiveActionInitMonitor(bus), LiveSymbolsPlaneMonitor(), LiveEffectsPlaneMonitor()]
     print("[Supervisor] Loaded.")
     setup_complete_event.set() 
     

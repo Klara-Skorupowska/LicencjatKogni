@@ -4,12 +4,14 @@ import numpy as np
 class Predicate():
     def __init__(self, max_points, base_radius=0.1, max_radius=1.0, 
                  learning_rate_b=0.2, learning_rate_n=0.006, 
-                 max_edge_age=5, lambda_step=1, alpha=0.5, d=0.995):
+                 max_edge_age=5, lambda_step=1, alpha=0.5, d=0.995, predicate_type=None):
         
         self.max_points = max_points
         self.base_radius = base_radius    
         self.max_radius = max_radius      
         
+        self.pred_type = predicate_type
+
         # Standard GNG Parameters
         self.eb = learning_rate_b         # Fraction to move the nearest node
         self.en = learning_rate_n         # Fraction to move topological neighbors

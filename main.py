@@ -18,8 +18,8 @@ def main():
     bus = Communicator()
     ### ---- CHOOSE PARAMETERS HERE ---- ###
     session_dir = 'new' # 'new' or 'continue' or <session dir>
-    runs = 2500
-    tests = 100
+    runs = 500
+    tests = 10
     ## agent ##
     agent = TheAgent(bus, runs, tests, session_dir)
     ## simulation ##

@@ -5,263 +5,128 @@ import numpy as np
 
 from .predicate import Predicate
 
+# helper classes
+
 class FatalError(Exception):
     def __init__(self, message):
         super().__init__(message)
 
+class Action:
+    def __init__(self, name: str):
+        self.name = name
+        self.mask = []  # dimentions handled by this action
+        self.init_state = Predicate(
+            max_points = 100,           # maxium of points in single GNG, if None then 2*dim
+            base_radius = 0.1,          # radius around separated GNG node
+            max_radius = 15,            # maximum local radius, if None then sqrt(dim)
+            learning_rate_b = 0.2,      # Fraction to move the nearest node
+            learning_rate_n = 0.01,     # Fraction to move topological neighbors
+            max_edge_age = 10,          # Maximum age of an edge before removal
+            lambda_step = 3,            # Steps between node insertion
+            alpha = 0.5,                # Error reduction during insertion
+            d = 0.95,                   # Global error decay per step
+            predicate_type= 'init'
+        )
+        self.effect_state = Predicate(
+            max_points = 100,           # maxium of points in single GNG, if None then 2*dim
+            base_radius = 0.1,          # radius around separated GNG node
+            max_radius = 15,            # maximum local radius, if None then sqrt(dim)
+            learning_rate_b = 0.2,      # Fraction to move the nearest node
+            learning_rate_n = 0.01,     # Fraction to move topological neighbors
+            max_edge_age = 10,          # Maximum age of an edge before removal
+            lambda_step = 3,            # Steps between node insertion
+            alpha = 0.5,                # Error reduction during insertion
+            d = 0.95,                   # Global error decay per step
+            predicate_type= 'effect'
+        )
+    def preconditions_met(self, vector) -> bool:
+        return self.init_state.is_active(vector)
+
 class BrainNetwork:
     def __init__(self, log_dir=None):
         self.state_dim = None 
-        # helper classes
-        class Node:
-            def __init__(self, name: str, predicate: Predicate):
-                self.name = name
-                self.predicate = predicate
-            
-            def __repr__(self):
-                return f"Node({self.name})"
-
-        class Edge:
-            def __init__(self, source_node: str, target_node: str):
-                self.source_node = source_node
-                self.target_node = target_node
-                self.count = 1
-
-            def __repr__(self):
-                return f"Edge({self.source_node} -> {self.target_node}, count={self.count})"
-            
-            def update(self, operation: str) -> bool:
-                """
-                operation = 'add' or 'delete'
-                """
-                if operation == 'add':
-                    self.count += 1
-                elif operation == 'delete':
-                    self.count  += -3 # more cautious with wrong transitions than the right ones
-                else:
-                    raise FatalError(f"Unsupported operation: {operation}")
-
-                return self.count > 0
-
-        class Graph:
-            def __init__(self):
-                # Maps node_name -> Node object
-                self.nodes = {}
-                # Maps target_node -> {source_node: Edge}
-                self.edges_by_target = {}
-
-            def add_node(self, name: str, predicate):
-                """Registers a new node in the graph."""
-                if name in self.nodes:
-                    raise ValueError(f"Node '{name}' already exists.")
-                self.nodes[name] = Node(name, predicate)
-                if name not in self.edges_by_target:
-                    self.edges_by_target[name] = {}
-
-            def add_edge(self, from_name: str, to_name: str):
-                """O(1) addition/increment of directed edge: from_name -> to_name"""
-                if from_name is None or to_name is None:
-                    return
-                if from_name not in self.nodes or to_name not in self.nodes:
-                    raise KeyError(f"Both nodes must exist: {from_name}, {to_name}")
-
-                incoming = self.edges_by_target.setdefault(to_name, {})
-                if from_name in incoming:
-                    incoming[from_name].update('add')
-                else:
-                    incoming[from_name] = Edge(from_name, to_name)
-
-            def delete_edge(self, from_name: str, to_name: str):
-                """O(1) decrement/removal of directed edge: from_name -> to_name"""
-                incoming = self.edges_by_target.get(to_name)
-                if not incoming or from_name not in incoming:
-                    return
-
-                edge = incoming[from_name]
-                still_alive = edge.update('delete')
-                if not still_alive:
-                    del incoming[from_name]
-
-            def get_incoming_edges(self, target_name: str) -> dict:
-                """Returns {source_node: Edge} incoming into target_name."""
-                return self.edges_by_target.get(target_name, {})
-
-            def get_node(self, name: str):
-                return self.nodes.get(name)
-
-            def get_nodes_list(self):
-                return list(self.nodes.keys())
-
-            def is_active(self, node_name: str, vector) -> bool:
-                """Checks if the predicate of a specific node is active in given vector."""
-                if node_name not in self.nodes:
-                    raise KeyError(f"Node '{node_name}' does not exist.")
-                return self.nodes[node_name].predicate.is_active(vector)
-
-            def update_predicate(self, node_name: str, vector, valence: bool):
-                """Updates the predicate of a specific node with a new vector and valence."""
-                if node_name not in self.nodes:
-                    raise KeyError(f"Node '{node_name}' does not exist.")
-                self.nodes[node_name].predicate.update(vector, valence)
-
-        # transitional graph - parameters
-        self.trans_graph = Graph()
-
-        # predicates as GNG - parameters
-        self.max_points = 100           # maxium of points in single GNG, if None then 2*dim
-        self.base_radius = 0.1          # radius around separated GNG node
-        self.max_radius = None          # maximum local radius, if None then sqrt(dim)
-        self.learning_rate_b = 0.2      # Fraction to move the nearest node
-        self.learning_rate_n = 0.01     # Fraction to move topological neighbors
-        self.max_edge_age = 10          # Maximum age of an edge before removal
-        self.lambda_step = 3            # Steps between node insertion
-        self.alpha = 0.5                # Error reduction during insertion
-        self.d = 0.95                   # Global error decay per step
+        self.actions = {}
+        self.symbols = {}          # Discovered grounded symbols: name -> Predicate
+        self.overlap_map = {}      # eff_name -> [init_names enabled]
 
         # Logging Setup
         self.log_dir = log_dir
         if self.log_dir:
             self.pddl_dir = os.path.join(self.log_dir, "PDDL")
             self.symbols_dir = os.path.join(self.log_dir, "PDDL", "symbols")
-            self.graphs_dir = os.path.join(self.log_dir, "graphs")
+            self.gngs_dir = os.path.join(self.log_dir, "GNG")
             os.makedirs(self.pddl_dir, exist_ok=True)
             os.makedirs(self.symbols_dir, exist_ok=True)
-            os.makedirs(self.graphs_dir, exist_ok=True)
-
-    def create_node(self, skill_name):
-        if skill_name not in self.trans_graph.nodes:
-            predicate = Predicate(self.max_points, self.base_radius, self.max_radius, 
-                                    self.learning_rate_b, self.learning_rate_n, self.max_edge_age, 
-                                    self.lambda_step, self.alpha, self.d)
-            self._add_node(skill_name, predicate, [])
-    
-    def _add_node(self, name: str, predicate: Predicate, incoming_actions: list[str]):
-        '''
-        adds node to the graph, name as a dict key, then in node: name, predicate. Then adds incoming_actions.
-        '''
-        if name not in self.trans_graph.nodes:
-            self.trans_graph.add_node(name, predicate)
-        
-        for action in incoming_actions:
-            if action in self.trans_graph.nodes:
-                self.trans_graph.add_edge(action, name)
-
-    def preconditions_met(self, skill_name, state_vector) -> bool:
-        """
-        check if predicate is active. GNG of skill_name, check if state_vector is ok
-        """
-        if self.state_dim is None:
-            self.state_dim = len(state_vector)
-            if self.max_points is None:
-                self.max_points = self.state_dim * 2
-            if self.max_radius is None:
-                self.max_radius = self.state_dim ** (0.5)
-
-        if skill_name not in self.trans_graph.nodes:
-            return False # New predicate has no vectors 
+            os.makedirs(self.gngs_dir, exist_ok=True)
             
-        return self.trans_graph.nodes[skill_name].predicate.is_active(state_vector)
+    def add_action(self, name: str) -> Action:
+        """
+        Registers a new named action with its initiation and effect GNG predicates.
+        """
+        if name not in self.actions:
+            self.actions[name] = Action(name)
+        return self.actions[name]
 
     def get_active_skills(self, vector):
-        """
-        get all nodes names, then check which ones are active for given vector
-        return a list of active ones
-        """
-        if self.state_dim is None:
-            self.state_dim = len(vector)
-            if self.max_points is None:
-                self.max_points = self.state_dim * 2
-            if self.max_radius is None:
-                self.max_radius = self.state_dim ** (0.5)
-
         active_skills = []
-        for name, node in self.trans_graph.nodes.items():
-            if node.predicate.is_active(vector):
-                active_skills.append(name)
+        for action in self.actions.values():
+            if action.preconditions_met(vector):
+                active_skills.append(action)
         return active_skills
-
-
-    def get_nodes(self):
-        """
-        return all nodes names as a list of strings
-        """
-        return self.trans_graph.get_nodes_list()
 
     def update_predicates(self, buffor):
         """
-        Updates GNG node predicates using unexpected outcomes accumulated in the buffer.
+        Updates GNG node predicates using transitions accumulated in the buffer:
+        (prev_vector_state, skill_name, vector_state, succeed)
         """
         print(f"\t[Brain] Updating Predicates (GNG)")
         for data in buffor:
-            prev_vector_state, skill_name, succeed = data
-        
-            # Ensure state dimensions are initialized
-            if self.state_dim is None:
-                self.state_dim = len(prev_vector_state)
-                if self.max_points is None:
-                    self.max_points = self.state_dim * 2
-                if self.max_radius is None:
-                    self.max_radius = self.state_dim ** 0.5
+            prev_vector_state, skill_name, vector_state, succeed = data
+            if skill_name not in self.actions:
+                self.actions[skill_name] = Action(skill_name)
 
-            # Ensure target node exists
-            if skill_name not in self.trans_graph.nodes:
-                predicate = Predicate(
-                    self.max_points, self.base_radius, self.max_radius,
-                    self.learning_rate_b, self.learning_rate_n, self.max_edge_age,
-                    self.lambda_step, self.alpha, self.d
-                )
-                self._add_node(skill_name, predicate, [])
-
-            # Update GNG predicate
-            self.trans_graph.update_predicate(skill_name, prev_vector_state, succeed)
+            self.actions[skill_name].init_state.update(prev_vector_state, succeed)
+            self.actions[skill_name].effect_state.update(vector_state, succeed)
 
         self._logger()
-            
-    def update_transition(self, prev_skill_name: str, skill_name: str, prev_succeed: bool, succeed: bool):
-        """
-        Updates transitional edges on every single skill execution.
-        """
-        if not prev_skill_name or not skill_name or prev_skill_name == skill_name:
-            return
-
-        if prev_succeed:
-            if succeed:
-                # Previous skill successfully set up the condition for skill_name
-                self.trans_graph.add_edge(prev_skill_name, skill_name)
-            else:
-                # Transition failed from previous skill to current skill
-                self.trans_graph.delete_edge(prev_skill_name, skill_name)
-
-        self._logger()
-
 
     def _logger(self):
-        '''
-        logs the graph and predicates into a JSON files
-        '''
+        """
+        Logs the raw GNG models into JSON files.
+        """
         if not self.log_dir:
             return
 
-        self.create_predicates()
+        for name, action in self.actions.items():
+            for pred in [action.init_state, action.effect_state]:
+                self._save_predicate_to_disk(
+                    pred, 
+                    os.path.join(self.gngs_dir, f"{name}_{pred.pred_type}.json")
+                )
 
-        edges_list = []
-        for target, sources in self.trans_graph.edges_by_target.items():
-            for source, edge in sources.items():
-                edges_list.append({
-                    "source": edge.source_node,
-                    "target": edge.target_node,
-                    "count": edge.count
-                })
-
-        graph_data = {
-            "nodes": list(self.trans_graph.nodes.keys()),
-            "edges": edges_list
+    def _save_predicate_to_disk(self, pred: Predicate, file_path: str):
+        parameters = {
+            "max_points": pred.max_points,
+            "base_radius": pred.base_radius,
+            "max_radius": pred.max_radius,
+            "learning_rate_b": pred.eb,
+            "learning_rate_n": pred.en,
+            "max_edge_age": pred.max_age,
+            "lambda_step": pred.lambda_step,
+            "alpha": pred.alpha,
+            "d": pred.d,
+            "type": pred.pred_type,
         }
-            
-        file_path = os.path.join(self.graphs_dir, "trans_graph.json")
-        temp_file = os.path.join(self.symbols_dir, f"trans_graph.tmp")
+        edges_str_keys = {f"{u},{v}": age for (u, v), age in pred.edges.items()}
+        data = {
+            "parameters": parameters,
+            "nodes": [n.tolist() for n in pred.nodes],
+            "edges": edges_str_keys,
+            "local_radiuses": [float(pred._get_local_radius(i)) for i in range(len(pred.nodes))]
+        }
+        temp_file = file_path + ".tmp"
         with open(temp_file, "w") as f:
-            json.dump(graph_data, f)
+            json.dump(data, f)
         for _ in range(5):
             try:
                 os.replace(temp_file, file_path)
@@ -269,62 +134,118 @@ class BrainNetwork:
             except (PermissionError, OSError):
                 time.sleep(0.05)
         else:
-            # Clean up temp file if all retries fail
             if os.path.exists(temp_file):
                 try:
                     os.remove(temp_file)
                 except OSError:
                     pass
 
+    @staticmethod
+    def _compute_gng_mask(gng_init, gng_eff, alpha_threshold=1.0):
+        """
+        Calculates which dimensions change between initiation and termination.
+        """
+        if not gng_init.nodes or not gng_eff.nodes:
+            return [], np.array([])
+
+        nodes_init = np.asarray(gng_init.nodes)
+        nodes_eff = np.asarray(gng_eff.nodes)
+    
+        num_dims = nodes_init.shape[1]
+        displacements = []
+        local_thresholds = []
+
+        for u_idx, u in enumerate(nodes_eff):
+            dists = np.linalg.norm(nodes_init - u, axis=1)
+            v_idx = int(np.argmin(dists))
+            v = nodes_init[v_idx]
+
+            diff = np.abs(u - v)
+            displacements.append(diff)
+
+            r_eff = gng_eff._get_local_radius(u_idx)
+            r_init = gng_init._get_local_radius(v_idx)
+            local_thresholds.append(0.5 * (r_eff + r_init))
+
+        displacements = np.asarray(displacements)
+        local_thresholds = np.asarray(local_thresholds)
+
+        mean_dim_disp = np.mean(displacements, axis=0)
+        mean_radius = np.mean(local_thresholds)
+        threshold = alpha_threshold * mean_radius
+
+        mask = [d for d in range(num_dims) if mean_dim_disp[d] > threshold]
+        return mask, mean_dim_disp
+
     def create_predicates(self):
         """
-        Builds grounded symbols and persists them to disk.
-        Saves GNG nodes, edges, local radiuses, and GNG parameters to JSON.
+        Konidaris Step 3 & 4:
+        1. Identifies masks for each option.
+        2. Computes pairwise subspace intersections (Eff_i ∩ Init_j).
+        3. Induces abstract propositional symbols and builds overlap map.
         """
-        if not self.log_dir:
-            return
+        print(f"\t[Brain] Discovering Abstract Symbols and Planning Graph")
+        self.overlap_map.clear()
+        self.symbols.clear()
 
-        # Collect parameters from self
-        parameters = {
-            "max_points": self.max_points,
-            "base_radius": self.base_radius,
-            "max_radius": self.max_radius,
-            "learning_rate_b": self.learning_rate_b,
-            "learning_rate_n": self.learning_rate_n,
-            "max_edge_age": self.max_edge_age,
-            "lambda_step": self.lambda_step,
-            "alpha": self.alpha,
-            "d": self.d,
-        }
-            
-        for name, node in self.trans_graph.nodes.items():
-            pred = node.predicate
-            # Edges are stored as tuples like (0, 1) -> Convert to string key for JSON
-            edges_str_keys = {f"{u},{v}": age for (u, v), age in pred.edges.items()}
-            
-            data = {
-                "parameters": parameters,
-                "nodes": [n.tolist() for n in pred.nodes],
-                "edges": edges_str_keys,
-                "local_radiuses": [float(pred._get_local_radius(i)) for i in range(len(pred.nodes))]
-            }
-            file_path = os.path.join(self.symbols_dir, f"{name}.json")
-            temp_file = os.path.join(self.symbols_dir, f"{name}.tmp")
-            with open(temp_file, "w") as f:
-                json.dump(data, f)
-            for _ in range(5):
-                try:
-                    os.replace(temp_file, file_path)
-                    break
-                except (PermissionError, OSError):
-                    time.sleep(0.05)
-            else:
-                # Clean up temp file if all retries fail
-                if os.path.exists(temp_file):
-                    try:
-                        os.remove(temp_file)
-                    except OSError:
-                        pass
+        # Step 3: Discover individual option masks
+        for name, action in self.actions.items():
+            mask, _ = self._compute_gng_mask(action.init_state, action.effect_state)
+            action.mask = mask
+
+        # Step 4: Inter-option pairwise evaluations
+        for src_name, src_action in self.actions.items():
+            eff_key = f"eff_{src_name}"
+            self.overlap_map[eff_key] = []
+            eff_gng = src_action.effect_state
+            mask = src_action.mask
+
+            if not eff_gng.nodes:
+                continue
+
+            for tgt_name, tgt_action in self.actions.items():
+                init_key = f"init_{tgt_name}"
+                init_gng = tgt_action.init_state
+
+                if not init_gng.nodes:
+                    continue
+
+                overlapping_points = []
+                init_nodes_arr = np.asarray(init_gng.nodes)
+
+                for node in eff_gng.nodes:
+                    if len(mask) > 0:
+                        # Project onto the mask factor subspace
+                        init_sub = init_nodes_arr[:, mask]
+                        node_sub = node[mask]
+                        dists = np.linalg.norm(init_sub - node_sub, axis=1)
+                        closest_idx = int(np.argmin(dists))
+                        r = init_gng._get_local_radius(closest_idx)
+                        if dists[closest_idx] <= r:
+                            overlapping_points.append(node)
+                    else:
+                        if init_gng.is_active(node):
+                            overlapping_points.append(node)
+
+                # If overlap exists, an abstract transition is feasible
+                if overlapping_points:
+                    self.overlap_map[eff_key].append(init_key)
+
+                    symbol_name = f"sym_{src_name}_to_{tgt_name}"
+                    sym_pred = Predicate(
+                        max_points=max(10, len(overlapping_points)),
+                        base_radius=init_gng.base_radius,
+                        max_radius=init_gng.max_radius,
+                        predicate_type='abstract'
+                    )
+                    for pt in overlapping_points:
+                        sym_pred.update(pt, valence=True)
+
+                    self.symbols[symbol_name] = sym_pred
+
+                    if self.log_dir:
+                        file_path = os.path.join(self.symbols_dir, f"{symbol_name}.json")
+                        self._save_predicate_to_disk(sym_pred, file_path)
 
     @staticmethod
     def load_predicate(file_path) -> Predicate:
@@ -334,18 +255,18 @@ class BrainNetwork:
         with open(file_path, "r") as f:
             data = json.load(f)
             
-        # Read parameters from JSON
         params = data.get("parameters", {})
         pred = Predicate(
-            max_points=params["max_points"],
-            base_radius=params["base_radius"],
-            max_radius=params["max_radius"],
-            learning_rate_b=params["learning_rate_b"],
-            learning_rate_n=params["learning_rate_n"],
-            max_edge_age=params["max_edge_age"],
-            lambda_step=params["lambda_step"],
-            alpha=params["alpha"],
-            d=params["d"]
+            max_points=params.get("max_points", 100),
+            base_radius=params.get("base_radius", 0.1),
+            max_radius=params.get("max_radius", 15),
+            learning_rate_b=params.get("learning_rate_b", 0.2),
+            learning_rate_n=params.get("learning_rate_n", 0.01),
+            max_edge_age=params.get("max_edge_age", 10),
+            lambda_step=params.get("lambda_step", 3),
+            alpha=params.get("alpha", 0.5),
+            d=params.get("d", 0.95),
+            predicate_type=params.get("type", None)
         )
 
         if "nodes" in data:
@@ -358,127 +279,103 @@ class BrainNetwork:
                 u, v_node = map(int, k.split(","))
                 parsed_edges[(u, v_node)] = v
             pred.edges = parsed_edges
+
+            # Rebuild adjacency
+            pred.adj = {}
+            for u, v_node in pred.edges.keys():
+                pred.adj.setdefault(u, set()).add(v_node)
+                pred.adj.setdefault(v_node, set()).add(u)
             
         return pred
 
     def load_brain(self, source_dir):
-        '''
-        loads transgraph an all the predicates from given directory in 'logs'.
-        '''
-        print(f"\t[Brain] Loading brain from the files.")
-        if source_dir is None:
-            print(f"\t[Brain] No source directory.")
+        """
+        Loads GNGs and symbols from an existing log directory into memory.
+        """
+        print(f"\t[Brain] Loading brain from: {source_dir}")
+        if not source_dir or not os.path.isdir(source_dir):
+            print(f"\t[Brain] Directory not found.")
             return
         
-        if os.path.isdir(source_dir):
-            # 1. Define source paths
-            src_graphs_file = os.path.join(source_dir, "graphs", "trans_graph.json")
-            src_symbols_dir = os.path.join(source_dir, "PDDL", "symbols")
-            
-            # 2. Define target paths (directories are already created in __init__)
-            target_graphs_file = os.path.join(self.graphs_dir, "trans_graph.json")
-            target_symbols_dir = self.symbols_dir
-            
-            # 3. Copy trans_graph.json
-            if not os.path.exists(src_graphs_file):
-                print(f"\t[Brain] Could not find trans_graph.json in {source_dir}")
-                return
-                
-            with open(src_graphs_file, "r") as src_f, open(target_graphs_file, "w") as dst_f:
-                dst_f.write(src_f.read())
-                
-            # 4. Copy all symbol JSON files
-            if os.path.exists(src_symbols_dir):
-                for filename in os.listdir(src_symbols_dir):
-                    if filename.endswith(".json"):
-                        src_file = os.path.join(src_symbols_dir, filename)
-                        dst_file = os.path.join(target_symbols_dir, filename)
-                        with open(src_file, "r") as src_f, open(dst_file, "w") as dst_f:
-                            dst_f.write(src_f.read())
+        src_gngs_dir = os.path.join(source_dir, "GNG")
+        src_symbols_dir = os.path.join(source_dir, "PDDL", "symbols")
 
-            # 5. Load the graph data from the NEW target location
-            with open(target_graphs_file, "r") as f:
-                graph_data = json.load(f)
-                
-            # 6. Load nodes and their predicates from the NEW target location
-            for node_name in graph_data.get("nodes", []):
-                predicate_file = os.path.join(target_symbols_dir, f"{node_name}.json")
-                if os.path.exists(predicate_file):
-                    predicate = self.load_predicate(predicate_file)
-                    self._add_node(node_name, predicate, [])
-                else:
-                    print(f"\t[Brain] Warning: Missing predicate file for node {node_name}")
-            
-            # 7. Reconstruct edges and their counts
-            for edge in graph_data.get("edges", []):
-                source = edge.get("source")
-                target = edge.get("target")
-                count = edge.get("count", 1)
-                
-                for _ in range(count):
-                    self.trans_graph.add_edge(source, target)
-    
-    def resolve_predicates(self, state_vector: np.ndarray) -> list:
-        """
-        Resolves a continuous state vector into active PDDL atomic propositions:
-        Returns list of active symbols prefixed with 'node_'.
-        """
-        active_skills = self.get_active_skills(state_vector)
-        return [f"node_{skill}" for skill in active_skills]
+        # Load option GNGs
+        if os.path.exists(src_gngs_dir):
+            for filename in os.listdir(src_gngs_dir):
+                if filename.endswith(".json"):
+                    file_path = os.path.join(src_gngs_dir, filename)
+                    base_name = filename[:-5]
+                    parts = base_name.rsplit("_", 1)
+                    if len(parts) == 2:
+                        action_name, p_type = parts
+                        if action_name not in self.actions:
+                            self.actions[action_name] = Action(action_name)
+                        
+                        pred = self.load_predicate(file_path)
+                        if p_type == 'init':
+                            self.actions[action_name].init_state = pred
+                        elif p_type == 'effect':
+                            self.actions[action_name].effect_state = pred
 
-    def generate_domain_pddl(self, domain_name="world") -> str:
+        # Load abstract symbols
+        if os.path.exists(src_symbols_dir):
+            for filename in os.listdir(src_symbols_dir):
+                if filename.endswith(".json"):
+                    sym_name = filename[:-5]
+                    file_path = os.path.join(src_symbols_dir, filename)
+                    self.symbols[sym_name] = self.load_predicate(file_path)
+
+    def generate_domain_pddl(self, domain_name="robot_domain") -> str:
         """
-        Generates domain.pddl using propositional logic for multi-target activation.
-        Fixed for strict parsers requiring :parameters ().
+        Konidaris Step 5:
+        Compiles discovered skills and initiation/effect overlaps into PDDL operators.
         """
-        nodes = self.trans_graph.get_nodes_list()
-        
         pddl = [
             f"(define (domain {domain_name})",
+            "  (:requirements :strips)",
             "  (:predicates"
         ]
         
-        # Generate a unique active predicate for every node
-        for n in nodes:
-            pddl.append(f"    (active_{n})")
+        # State conditions: Can we start an action? Did an action finish?
+        for act in self.actions.keys():
+            pddl.append(f"    (can_run_{act})")
+            pddl.append(f"    (executed_{act})")
             
         pddl.append("  )")
-        
-        # Generate actions with hardcoded outgoing connections
-        for node in nodes:
-            # 1. Find all nodes this specific node points to
-            outgoing_nodes = []
-            for target, sources in self.trans_graph.edges_by_target.items():
-                if node in sources and sources[node].count > 0: 
-                    outgoing_nodes.append(target)
-            
+
+        # Operators derived from each option
+        for src_name in self.actions.keys():
+            eff_key = f"eff_{src_name}"
+            enabled_inits = self.overlap_map.get(eff_key, [])
+
             pddl.extend([
                 "",
-                f"  (:action {node}",
-                "    :parameters ()",  # <-- Added this line to satisfy Pyperplan
-                f"    :precondition (active_{node})"
+                f"  (:action {src_name}",
+                "    :parameters ()",
+                f"    :precondition (can_run_{src_name})",
             ])
-            
-            # 2. Build the effects: deactivate current (optional), activate all targets
-            effects = [f"(not (active_{node}))"] # Consumes the current active state
-            for out in outgoing_nodes:
-                effects.append(f"(active_{out})")
-                
-            if len(effects) == 1:
-                pddl.append(f"    :effect {effects[0]}")
-            else:
-                effects_str = " ".join(effects)
-                pddl.append(f"    :effect (and {effects_str})")
-                
+
+            # Building Add & Delete lists based on effects
+            adds = [f"(executed_{src_name})"]
+            for init_str in enabled_inits:
+                target_act = init_str.replace("init_", "")
+                adds.append(f"(can_run_{target_act})")
+
+            # Consumes its own initiation precondition
+            deletes = [f"(can_run_{src_name})"]
+
+            pddl.append(f"    :effect (and {' '.join(adds)} (not {' '.join(deletes)}))")
             pddl.append("  )")
-            
+
         pddl.append(")")
         return "\n".join(pddl)
 
-    def generate_problem_pddl(self, initial_state, goal_state, 
-                              problem_name="plan_problem", domain_name="world") -> str:
+    def generate_problem_pddl(self, current_vector, target_skill, 
+                              problem_name="plan_task", domain_name="robot_domain") -> str:
         """
-        Generates problem.pddl.
+        Grounds the initial state by testing which skills can run on the continuous vector,
+        and sets the goal condition to completing the target skill.
         """
         pddl = [
             f"(define (problem {problem_name})",
@@ -486,13 +383,13 @@ class BrainNetwork:
             "  (:init"
         ]
         
-        # We only need to declare the initial active state
-        if initial_state:
-            pddl.append(f"    (active_{initial_state})")
+        for name, action in self.actions.items():
+            if action.preconditions_met(current_vector):
+                pddl.append(f"    (can_run_{name})")
             
         pddl.append("  )") 
         pddl.append("  (:goal")
-        pddl.append(f"    (active_{goal_state})")
+        pddl.append(f"    (executed_{target_skill})")
         pddl.append("  )")
         pddl.append(")")
         
