@@ -24,6 +24,10 @@ def simulation_loop(bus: Communicator, setup_complete_event, robot: RealRobot, a
 
     except KeyboardInterrupt:
         print("[Simulation] Simulation stopped by user.")
+    except Exception as e:
+        import traceback
+        print(f"[Agent] CRITICAL CRASH in run(): {e}")
+        traceback.print_exc()
     finally:
         world.close()
         print("[Simulation] World closed safely.")

@@ -17,9 +17,9 @@ def main():
     print("Open communication")
     bus = Communicator()
     ### ---- CHOOSE PARAMETERS HERE ---- ###
-    session_dir = 'continue' # 'new' or 'continue' or <session dir>
-    runs = 1000
-    tests = 30
+    session_dir = 'new' # 'new' or 'continue' or <session dir>
+    runs = 2500
+    tests = 100
     ## agent ##
     agent = TheAgent(bus, runs, tests, session_dir)
     ## simulation ##

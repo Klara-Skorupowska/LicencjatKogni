@@ -38,8 +38,10 @@ class TheAgent(Agent):
 
         self.current_skill = None
         self.bus.register_service('agent/ask/action', self._give_current_action)
+        self.reset_requested = False
+        self.bus.subscribe("/supervisor/event/reset", self._handle_supervisor_reset)
 
-        save_dist = 0.05
+        save_dist = 0.08
         velocity = 15
         self.skillset = {
             'Start':Start(bus,self.camera, self.lidars, self.wheels, velocity, save_dist=save_dist, timeout=1.0),
@@ -90,9 +92,21 @@ class TheAgent(Agent):
         self.run_count = 0
         self.batch_update_count = 0
         self.timestamps = []
-
+        
     def _give_current_action(self, request=None):
         return self.current_skill
+
+    def _handle_supervisor_reset(self, message):
+        """Triggered from supervisor thread when the robot is stuck."""
+        self.reset_requested = True
+        if message['reason'] == 'finish':
+            self.bus.call_service("/supervisor/do/restart")
+
+    def _reset_run_state(self):
+        """Resets skills and clears flags for the next run."""
+        self.previous_skill = self.ExecutedSkill(None, None)
+        self.current_skill = None
+        self.reset_requested = False
 
     def _get_latest_session(self, logs_root):
         target_dir = None
@@ -141,14 +155,14 @@ class TheAgent(Agent):
                     f.write(f"{log}/n")
                 if tests_runned:
                     f.write("-" * 100 + "\n")
+                    successes = sum(test[5] for test in self.tests)
+                    f.write(f"tests: {self.N_tests}, successes: {successes}\n")
                     f.write(f"{'Test':<20} | {'Plan Length':<15} | {'Steps Executed':<15} | {'Last Action':<15} | {'Duration [s]':<15} | {'Result':<15}\n")
                     successes = 0
                     for test in self.tests:
                         run, length, steps_executed, last_step, duration, result = test
                         f.write(f"{run+1:<20} | {length:<15} | {steps_executed:<15} | {last_step:<15} | {duration:<15.3f} | {result:<10}\n")
-                        if result:
-                            successes += 1
-                    f.write(f"tests: {self.N_tests}, successes: {successes}\n")
+                    
 
         if self.timestamps_path:
             with open(self.timestamps_path, "w") as f:
@@ -160,45 +174,57 @@ class TheAgent(Agent):
         try:
            self.run_count = 0
            self.start_time = time.time()
-           prev_skill = self.ExecutedSkill(None, None)
+           self._reset_run_state()
 
            while self.run_count < self.max_runs:
                self._logger(self.run_count)
                self.run_count += 1
                print(f"[Agent] Run {self.run_count}/{self.max_runs} ---------------")
+               if self.reset_requested: self._reset_run_state()
                #-> Generate Plan
                plan, start_skill, finish_skill = self.generate_plan()
                if len(plan) < 1: # what if plan is empty? Explore
                    print("[Agent] Returned empty plan.")
-                   prev_skill = self.explore(prev_skill) 
+                   self.explore() 
                    continue # the while loop
                #-> Execute Next Step of a Plan
                print("[Agent] Start executing plan.")
+               print(f"[Agent] Plan: {plan}")
                plan_completed = True
                for i, skill_name in enumerate(plan):
                    print(f"[Agent] Executing step {i+1}/{len(plan)}: {skill_name}")
-                   success = self.execute_skill(skill_name, prev_skill)
+                   success = self.execute_skill(skill_name, self.previous_skill)
                    #-> Was it successful?
                    if not success: #-> if not, explore
                        print("[Agent] Failed action. Abandoning the plan.")
-                       prev_skill = self.explore(prev_skill)
+                       self.explore()
                        plan_completed = False
                        break # the for loop
                    #-> if yes, do the next step of the plan
-                   prev_skill.name = skill_name
-                   prev_skill.succeed = True
+                   self.previous_skill.name = skill_name
+                   self.previous_skill.succeed = True
                if start_skill == 'Start' and finish_skill == 'Finish' and plan_completed:
                    print("[Agent] Clear Run from Start to Finish.")
                    break
 
+        except Exception as e:
+            import traceback
+            print(f"[Agent] CRITICAL CRASH in run(): {e}")
+            traceback.print_exc()
+
         finally:
+            self.brain.update_predicates(self.fail_buffor)
             self.end_time = time.time()
             self.brain._logger()
             self.test_run()
             self._logger(self.run_count, tests_runned=True)
             
                
-    def execute_skill(self, skill_name, prev_skill):
+    def check_goal_reached(self) -> bool:
+        finish_skill = self.skillset['Finish']
+        return finish_skill.execute()
+
+    def execute_skill(self, skill_name, prev_skill: ExecutedSkill):
         print(f"[Agent] Execute Skill")
         self.current_skill = skill_name
         #-> read state
@@ -210,28 +236,26 @@ class TheAgent(Agent):
         #-> execute the skill
         skill = self.skillset[skill_name]
         succeed = skill.execute()
-        vector_state = self.read_state()
-
-        # collect stats &&
+        #-> update edges
+        self.brain.update_transition(prev_skill.name, skill_name, prev_skill.succeed, succeed)
         #-> Is the outcome expectable? expectable = preconditions are met and success OR preconditions are not met and fail
-        data = (prev_skill.name, prev_vector_state, prev_skill.succeed, skill_name, vector_state, succeed)
+        data = (prev_vector_state, skill_name, succeed)
+        expectable = ( preconditions_are_met and succeed ) or (not preconditions_are_met and not succeed)
+        if not expectable:
+            #-> add to buffor
+            self.add_to_buffor(data)
+        # collect stats
         if preconditions_are_met:
             if succeed:
                 self.skill_stats[skill_name]['true_positive'] += 1
             else:
-                self.skill_stats[skill_name]['false_negative'] += 1
-                #-> Add unexpected data to buffor
-                self.add_to_buffor(data)
+                self.skill_stats[skill_name]['false_negative'] += 1                
         else:
             if succeed:
                 self.skill_stats[skill_name]['false_positive'] += 1
-                #-> Add unexpected data to buffor
-                self.add_to_buffor(data)
             else:
                 self.skill_stats[skill_name]['true_negative'] += 1
-
-        if not skill_name == 'Finish':
-            self.execute_skill('Finish', self.ExecutedSkill(skill_name, succeed))
+        
         return succeed
 
     def read_state(self):
@@ -247,21 +271,32 @@ class TheAgent(Agent):
         state_vector = np.concatenate([self.lidars.coded, self.camera.coded]).flatten()
         return state_vector
 
-    def explore(self, prev_skill):
+    def explore(self):
         print("[Agent] Explore")
         #-> choose random action (not checking the finish)
-        available_skills = [k for k in self.skillset if k != "Finish"]
+        #available_skills = [k for k in self.skillset if k != "Finish"]
+        available_skills = list(self.skillset.keys())
         if not available_skills:
             return None
         skill_name = random.choice(available_skills)
         #-> execute action
-        succeed = self.execute_skill(skill_name, prev_skill)
-        #-> return this action
-        return self.ExecutedSkill(skill_name, succeed)
+        succeed = self.execute_skill(skill_name, self.previous_skill)
+        self.previous_skill = self.ExecutedSkill(skill_name, succeed)
+        #-> test for goal
+        ''' useless since we do not add data to buffor
+        if self.check_goal_reached():
+            print("[Agent] Goal reached early!")
+            #-> restart
+            self._reset_run_state()
+        '''
+        # test for being stuck
+        if self.reset_requested: self._reset_run_state()
+        #-> return this action 
+        ## done as self.previous_skill
      
     def add_to_buffor(self, data):
         if len(self.fail_buffor) >= self.buffor_max_len:
-            self.brain.update(self.fail_buffor)
+            self.brain.update_predicates(self.fail_buffor)
             self.batch_update_count += 1
             self.fail_buffor = []
         self.fail_buffor.append(data)
@@ -273,21 +308,23 @@ class TheAgent(Agent):
         #-> read state
         vector_state = self.read_state()
         #-> get active skills: by resolving predicates, which skills are doable right now
-        active_skills = self.brain.get_active_skills(vector_state)
-        if not active_skills: # if no active skills (nodes), no plan at all
-            print(f"[Agent] No active skills.")
-            return [], None, None 
-        #-> choose the starting skill from active ones
-        if start_skill is None:
-            start_skill = random.choice(active_skills)
-        #-> choose the goal from nodes in the transgraph
-        if goal_skill is None:
-            nodes = self.brain.get_nodes()
-            nodes =  [n for n in nodes if n != start_skill]
-            if not nodes:
-                print(f"[Agent] No nodes in transitional graph.")
-                return [], None, None
-            goal_skill = random.choice(nodes)
+        if start_skill is None or goal_skill is None:
+            active_skills = self.brain.get_active_skills(vector_state)
+            if not active_skills: # if no active skills (nodes), no plan at all
+                print(f"[Agent] No active skills.")
+                return [], None, None 
+            print(f"[Agent] Active predicates: {active_skills}")
+            #-> choose the starting skill from active ones
+            if start_skill is None:
+                start_skill = random.choice(active_skills)
+            #-> choose the goal from nodes in the transgraph
+            if goal_skill is None:
+                nodes = self.brain.get_nodes()
+                nodes =  [n for n in nodes if n != start_skill]
+                if not nodes:
+                    print(f"[Agent] No nodes in transitional graph.")
+                    return [], None, None
+                goal_skill = random.choice(nodes)
 
         print(f"[Agent] Generating plan from {start_skill} to {goal_skill}.")
 
@@ -369,7 +406,7 @@ class TheAgent(Agent):
 
     def  test_run(self):
         for i in range(self.N_tests):
-            print(f"[Agent] Test {i}/{self.N_tests}.")
+            print(f"[Agent] Test {i+1}/{self.N_tests}.")
             start = time.time()
             # restart
             self.bus.call_service(f"/supervisor/do/restart")

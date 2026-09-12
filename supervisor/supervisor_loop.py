@@ -32,6 +32,10 @@ def supervisor_loop(bus: Communicator, setup_complete_event: threading.Event, st
 
     except KeyboardInterrupt:
         print("[Supervisor] Thread stopped by user.")
+    except Exception as e:
+        import traceback
+        print(f"[Agent] CRITICAL CRASH in run(): {e}")
+        traceback.print_exc()
     finally:
         for monitor in monitors:
             monitor.close()

@@ -1,6 +1,6 @@
 import os
 import json
-from tkinter import SEL
+import time
 import numpy as np
 
 from .predicate import Predicate
@@ -37,7 +37,7 @@ class BrainNetwork:
                 if operation == 'add':
                     self.count += 1
                 elif operation == 'delete':
-                    self.count  = 0 # really delete += - 10 # much harder on the wrong points # or += -1 
+                    self.count  += -3 # more cautious with wrong transitions than the right ones
                 else:
                     raise FatalError(f"Unsupported operation: {operation}")
 
@@ -104,17 +104,17 @@ class BrainNetwork:
                     raise KeyError(f"Node '{node_name}' does not exist.")
                 self.nodes[node_name].predicate.update(vector, valence)
 
-        # transitional graph
+        # transitional graph - parameters
         self.trans_graph = Graph()
 
         # predicates as GNG - parameters
-        self.max_points = None          # maxium of points in single GNG, if None then 2*dim
+        self.max_points = 100           # maxium of points in single GNG, if None then 2*dim
         self.base_radius = 0.1          # radius around separated GNG node
         self.max_radius = None          # maximum local radius, if None then sqrt(dim)
         self.learning_rate_b = 0.2      # Fraction to move the nearest node
         self.learning_rate_n = 0.01     # Fraction to move topological neighbors
         self.max_edge_age = 10          # Maximum age of an edge before removal
-        self.lambda_step = 5            # Steps between node insertion
+        self.lambda_step = 3            # Steps between node insertion
         self.alpha = 0.5                # Error reduction during insertion
         self.d = 0.95                   # Global error decay per step
 
@@ -187,43 +187,53 @@ class BrainNetwork:
         """
         return self.trans_graph.get_nodes_list()
 
-    def update(self, buffor):
-        '''
-        updates the transitional graph.
-        '''
-        print(f"\t[Brain] Update Brain")
+    def update_predicates(self, buffor):
+        """
+        Updates GNG node predicates using unexpected outcomes accumulated in the buffer.
+        """
+        print(f"\t[Brain] Updating Predicates (GNG)")
         for data in buffor:
-            prev_skill_name, prev_vector_state, prev_succeed, skill_name, vector_state, succeed = data
-            
-            # Dynamically initialize state_dim if this is the first data
+            prev_vector_state, skill_name, succeed = data
+        
+            # Ensure state dimensions are initialized
             if self.state_dim is None:
                 self.state_dim = len(prev_vector_state)
                 if self.max_points is None:
                     self.max_points = self.state_dim * 2
                 if self.max_radius is None:
-                    self.max_radius = self.state_dim ** (0.5)
+                    self.max_radius = self.state_dim ** 0.5
 
-            # Ensure the node exists
+            # Ensure target node exists
             if skill_name not in self.trans_graph.nodes:
-                predicate = Predicate(self.max_points, self.base_radius, self.max_radius, 
-                                      self.learning_rate_b, self.learning_rate_n, self.max_edge_age, 
-                                      self.lambda_step, self.alpha, self.d)
+                predicate = Predicate(
+                    self.max_points, self.base_radius, self.max_radius,
+                    self.learning_rate_b, self.learning_rate_n, self.max_edge_age,
+                    self.lambda_step, self.alpha, self.d
+                )
                 self._add_node(skill_name, predicate, [])
 
-            # -> update predicate
+            # Update GNG predicate
             self.trans_graph.update_predicate(skill_name, prev_vector_state, succeed)
-            
-            # -> update edges if previously we were within the node
-            if prev_succeed: # prev_succeed == this is not accidental
-                if succeed: # it put as in a good place
-                    if not prev_skill_name == skill_name: # do not add self loops
-                        self.trans_graph.add_edge(prev_skill_name, skill_name)
-                else: # it put as in a bad place
-                    self.trans_graph.delete_edge(prev_skill_name, skill_name)
-            
 
         self._logger()
             
+    def update_transition(self, prev_skill_name: str, skill_name: str, prev_succeed: bool, succeed: bool):
+        """
+        Updates transitional edges on every single skill execution.
+        """
+        if not prev_skill_name or not skill_name or prev_skill_name == skill_name:
+            return
+
+        if prev_succeed:
+            if succeed:
+                # Previous skill successfully set up the condition for skill_name
+                self.trans_graph.add_edge(prev_skill_name, skill_name)
+            else:
+                # Transition failed from previous skill to current skill
+                self.trans_graph.delete_edge(prev_skill_name, skill_name)
+
+        self._logger()
+
 
     def _logger(self):
         '''
@@ -249,8 +259,22 @@ class BrainNetwork:
         }
             
         file_path = os.path.join(self.graphs_dir, "trans_graph.json")
-        with open(file_path, "w") as f:
-            json.dump(graph_data, f, indent=4)
+        temp_file = os.path.join(self.symbols_dir, f"trans_graph.tmp")
+        with open(temp_file, "w") as f:
+            json.dump(graph_data, f)
+        for _ in range(5):
+            try:
+                os.replace(temp_file, file_path)
+                break
+            except (PermissionError, OSError):
+                time.sleep(0.05)
+        else:
+            # Clean up temp file if all retries fail
+            if os.path.exists(temp_file):
+                try:
+                    os.remove(temp_file)
+                except OSError:
+                    pass
 
     def create_predicates(self):
         """
@@ -282,11 +306,25 @@ class BrainNetwork:
                 "parameters": parameters,
                 "nodes": [n.tolist() for n in pred.nodes],
                 "edges": edges_str_keys,
-                "local_radiuses": [pred._get_local_radius(i) for i in range(len(pred.nodes))]
+                "local_radiuses": [float(pred._get_local_radius(i)) for i in range(len(pred.nodes))]
             }
             file_path = os.path.join(self.symbols_dir, f"{name}.json")
-            with open(file_path, "w") as f:
-                json.dump(data, f, indent=4)
+            temp_file = os.path.join(self.symbols_dir, f"{name}.tmp")
+            with open(temp_file, "w") as f:
+                json.dump(data, f)
+            for _ in range(5):
+                try:
+                    os.replace(temp_file, file_path)
+                    break
+                except (PermissionError, OSError):
+                    time.sleep(0.05)
+            else:
+                # Clean up temp file if all retries fail
+                if os.path.exists(temp_file):
+                    try:
+                        os.remove(temp_file)
+                    except OSError:
+                        pass
 
     @staticmethod
     def load_predicate(file_path) -> Predicate:
@@ -411,7 +449,7 @@ class BrainNetwork:
             # 1. Find all nodes this specific node points to
             outgoing_nodes = []
             for target, sources in self.trans_graph.edges_by_target.items():
-                if node in sources and sources[node].count > 0:
+                if node in sources and sources[node].count > 0: 
                     outgoing_nodes.append(target)
             
             pddl.extend([

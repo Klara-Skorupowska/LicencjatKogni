@@ -10,10 +10,12 @@
 ()  - zrobione, a nie było planowane
 ---------------------------------------
 ---------------------------------------
+### 12.09.2026 ###
+	móstwo robię na bieżąco
 
 ### 11.09.2026 ###
-[] ogarnij skille, znów
-[] dodaj debugline pybullet żeby widzieć gdzie jest jaka strefa
+[o] ogarnij skille, znów
+[o] dodaj debugline pybullet żeby widzieć gdzie jest jaka strefa
 
 ### 11.09.2026 ###
 [] zobaczyć ile startów mu potrzeba, żeby się nauczył. ODP.:

@@ -207,7 +207,7 @@ class GoToTheColor(SerialSkill):
         wheels, 
         velocity: float, 
         save_dist: float, 
-        target_distance: float = 0.05,
+        target_distance: float = 0.09,
         distance_tolerance: float = 0.005,
         timeout: float = 15.0
     ):
@@ -322,14 +322,13 @@ class GoToTheColor(SerialSkill):
                     self.wheels.set_parameters([self.velocity, self.velocity])
                 time.sleep(0.01)
 
-            # 1. == success
-            # 2.
-            if not at_target_distance and centered: aproaching()
-            # 3.
-            elif at_target_distance and not centered: centering()
-            # 4.
-            elif not at_target_distance and not centered: centering()
 
+            if not at_target_distance:
+                if centered:
+                    aproaching()
+                    continue
+                
+            centering()
 
         self.wheels.set_parameters([0, 0])
         print(f"\t[Skill] {self.__class__.__name__} failed. Timed out.")
@@ -508,8 +507,8 @@ class Finish(SerialSkill):
 
         # 4. FINAL STATE EVALUATION
         if in_goal_zone and facing_goal:
-            print(f"\t[Skill] {self.__class__.__name__} succeed. Restart.")
-            self.bus.call_service("/supervisor/do/restart")
+            print(f"\t[Skill] {self.__class__.__name__} succeed. Restart needed.")
+            self.bus.publish("/supervisor/event/reset", {"reason": "finish"})
             return True
         
         mssg = ""

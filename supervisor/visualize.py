@@ -310,7 +310,7 @@ class Renderer:
         # 2. Compute Force-Directed / Spring Layout
         # 'k' controls the optimal distance between nodes. Increasing it forces more spacing.
         optimal_dist = node_radius / math.sqrt(max(len(nodes), 1)) 
-        raw_pos = nx.spring_layout(G, k=optimal_dist, center=center, scale=220, seed=42)
+        raw_pos = nx.spring_layout(G, k=optimal_dist, center=center, scale=210, seed=42)
         
         # 3. Convert float coordinates to integer pixels for OpenCV
         positions = {node: (int(coords[0]), int(coords[1])) for node, coords in raw_pos.items()}
@@ -815,8 +815,7 @@ class UnifiedGNGPictureGenerator(PictureGenerator):
         if not os.path.exists(symbols_dir): return
 
         json_files = glob.glob(os.path.join(symbols_dir, "*.json"))
-        if not json_files: return
-
+        
         G = nx.Graph()
         node_colors = {}
         edge_colors = {}
@@ -862,7 +861,7 @@ class UnifiedGNGPictureGenerator(PictureGenerator):
         out_path = os.path.join(out_dir, "unified_gng_plane.png")
         cv2.imwrite(out_path, img)
         print(f"[PictureGenerator] Saved Unified GNG plane to {out_path}")
-
+            
 class PipelinePictureGenerator(PictureGenerator):
     def __init__(self, logs_root="logs", session_dir=None):
         super().__init__(logs_root=logs_root, session_dir=session_dir)
@@ -1099,59 +1098,78 @@ class LiveGNGMonitor(Renderer):
         if not os.path.exists(symbols_dir): return
 
         json_files = glob.glob(os.path.join(symbols_dir, "*.json"))
-        if not json_files: return
-
-        # Check if any symbol file has changed
-        needs_update = False
-        for f in json_files:
-            mtime = os.path.getmtime(f)
-            if self._last_mtimes.get(f, 0.0) < mtime:
-                needs_update = True
-                self._last_mtimes[f] = mtime
-                
-        if not needs_update: return
-
-        G = nx.Graph()
-        node_colors = {}
-        edge_colors = {}
-        
         for json_path in json_files:
+            data = None
+            for _ in range(3):
+                try:
+                    with open(json_path, 'r') as f:
+                        data = json.load(f)
+                    break
+                except (PermissionError, OSError, json.JSONDecodeError):
+                    time.sleep(0.05)
+
+            if data is None:
+                continue
+
             try:
-                with open(json_path, 'r') as f:
-                    data = json.load(f)
-                
                 pred_name = os.path.splitext(os.path.basename(json_path))[0]
                 color = self._get_color(pred_name)
+                # ... rest of the parsing logic ...
+
+                # Check if any symbol file has changed
+                needs_update = False
+                for f in json_files:
+                    mtime = os.path.getmtime(f)
+                    if self._last_mtimes.get(f, 0.0) < mtime:
+                        needs_update = True
+                        self._last_mtimes[f] = mtime
                 
-                nodes = data.get("nodes", [])
-                radiuses = data.get("local_radiuses", [])
+                if not needs_update: return
+
+                G = nx.Graph()
+                node_colors = {}
+                edge_colors = {}
+        
+                for json_path in json_files:
+                    try:
+                        with open(json_path, 'r') as f:
+                            data = json.load(f)
                 
-                for i in range(len(nodes)):
-                    node_id = f"{pred_name}_{i}"
+                        pred_name = os.path.splitext(os.path.basename(json_path))[0]
+                        color = self._get_color(pred_name)
+                
+                        nodes = data.get("nodes", [])
+                        radiuses = data.get("local_radiuses", [])
+                
+                        for i in range(len(nodes)):
+                            node_id = f"{pred_name}_{i}"
                     
-                    # Safely map the local radius to the node
-                    r_val = radiuses[i] if i < len(radiuses) else 0.0
-                    G.add_node(node_id, radius=r_val)
+                            # Safely map the local radius to the node
+                            r_val = radiuses[i] if i < len(radiuses) else 0.0
+                            G.add_node(node_id, radius=r_val)
                     
-                    node_colors[node_id] = color
+                            node_colors[node_id] = color
 
-                edges_dict = data.get("edges", {})
-                for edge_str in edges_dict.keys():
-                    u_str, v_str = edge_str.split(",")
-                    u_id = f"{pred_name}_{u_str}"
-                    v_id = f"{pred_name}_{v_str}"
-                    G.add_edge(u_id, v_id)
-                    edge_colors[(u_id, v_id)] = color
-                    edge_colors[(v_id, u_id)] = color
-            except Exception as e:
-                print(f"[LiveGNGMonitor] Failed to read {json_path}: {e}")
+                        edges_dict = data.get("edges", {})
+                        for edge_str in edges_dict.keys():
+                            u_str, v_str = edge_str.split(",")
+                            u_id = f"{pred_name}_{u_str}"
+                            v_id = f"{pred_name}_{v_str}"
+                            G.add_edge(u_id, v_id)
+                            edge_colors[(u_id, v_id)] = color
+                            edge_colors[(v_id, u_id)] = color
+                    except Exception as e:
+                        print(f"[LiveGNGMonitor] Failed to read {json_path}: {e}")
 
-        if len(G.nodes) == 0: return
+                if len(G.nodes) == 0: return
 
-        img = self.create_base_canvas("LIVE GNG PLANE")
-        self.draw_unified_GNG(img, G, node_colors, edge_colors, self.gng_colors)
+                img = self.create_base_canvas("LIVE GNG PLANE")
+                self.draw_unified_GNG(img, G, node_colors, edge_colors, self.gng_colors)
 
-        cv2.imshow(self.window_name, img)
+                cv2.imshow(self.window_name, img)
+
+            except OSError:
+                pass
 
     def close(self):
         if self._window_created:

@@ -61,8 +61,11 @@ class Supervisor():
         if self.last_position is not None:
             distance = math.dist(position, self.last_position)
             if distance < 0.01:
+                print("[Supervisor] Robot stuck in place for too long.")
                 self.bus.publish("/cmd/wheels", {"left": 0, "right": 0})
                 self.restart()
+                # Notify the agent that an environmental reset occurred
+                self.bus.publish("/supervisor/event/reset", {"reason": "stuck"})
         
         self.last_position = position
     
