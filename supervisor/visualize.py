@@ -1,4 +1,5 @@
 import os
+import re
 import glob
 import json
 import time
@@ -504,11 +505,11 @@ class Renderer:
 
         # 4. Draw legend
         legend_start_y = 120
-        cv2.putText(img, "Predicates:", (820, legend_start_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.TEXT_MAIN, 1, cv2.LINE_AA)
+        cv2.putText(img, "Predicates:", (720, legend_start_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.TEXT_MAIN, 1, cv2.LINE_AA)
         for i, (pred_name, color) in enumerate(gng_colors.items()):
             y_pos = legend_start_y + 25 + (i * 20)
-            cv2.circle(img, (830, y_pos - 4), 5, color, -1, cv2.LINE_AA)
-            cv2.putText(img, pred_name[:18], (845, y_pos), cv2.FONT_HERSHEY_SIMPLEX, 0.45, self.TEXT_MAIN, 1, cv2.LINE_AA)
+            cv2.circle(img, (730, y_pos - 4), 5, color, -1, cv2.LINE_AA)
+            cv2.putText(img, pred_name, (745, y_pos), cv2.FONT_HERSHEY_SIMPLEX, 0.45, self.TEXT_MAIN, 1, cv2.LINE_AA)
 
 
     def draw_frequency_plot(self, img, timestamps, bin_size_sec=60.0):
@@ -611,10 +612,34 @@ class PictureGenerator:
 
 
 class GNGPictureGenerator(PictureGenerator):
+
+    def _format_display_name(self, filename):
+        """Converts filename to a display name without '_init' and with spaces instead of '_'."""
+        name = os.path.splitext(os.path.basename(filename))[0]
+
+        # Handle the "sym_{from_name}_enables_{to_name}_pass" pattern
+        match = re.fullmatch(r"sym_(.+?)_enables_(.+?)_pass", name)
+        if match:
+            from_name, to_name = match.groups()
+            from_name = from_name.replace("_", " ").strip()
+            to_name = to_name.replace("_", " ").strip()
+            return f"{from_name} -> {to_name}"
+
+        if name.endswith("_init"):
+            name = name[:-5]
+            name += ' - Precondition'
+        elif name.endswith("_eff"):
+            name = name[:-4]
+            name += ' - Effect'
+        elif name.endswith("_pass"):
+            name = name[:-5]
+            name += ' - Transition'
+        return name.replace("_", " ").strip()
+
     def run(self):
         latest_session = self.get_latest_session()
         if not latest_session: return
-        symbols_dir = os.path.join(latest_session, "PDDL", "symbols")
+        symbols_dir = os.path.join(latest_session, "PDDL", "GNG")
         if not os.path.exists(symbols_dir): return
         
         for json_path in glob.glob(os.path.join(symbols_dir, "*.json")):
@@ -631,8 +656,7 @@ class GNGPictureGenerator(PictureGenerator):
                 mean_vals = np.mean(nodes, axis=0)
                 var_vals = np.var(nodes, axis=0)
                 
-                file_base = os.path.splitext(os.path.basename(json_path))[0]
-                display_title = file_base.replace("_", " ")
+                display_title = self._format_display_name(json_path)
                 img = self.renderer.create_base_canvas(f"GNG INVARIANTS: {display_title}")
                 
                 # Pass min, max, and mean for all lidar directions
@@ -662,6 +686,7 @@ class GNGPictureGenerator(PictureGenerator):
                 out_dir = self.get_pictures_dir()
                 if not out_dir:
                     return
+                file_base = os.path.splitext(os.path.basename(json_path))[0]
                 out_path = os.path.join(out_dir, f"{file_base}_invariants.png")
                 cv2.imwrite(out_path, img)
                 print(f"[PictureGenerator] Saved GNG invariants to {out_path}")
@@ -670,13 +695,35 @@ class GNGPictureGenerator(PictureGenerator):
 
 class RepresentativePointPictureGenerator(PictureGenerator):
     """Generates a static sensimotor visualization of the representative medoid point for each symbol JSON."""
+    
+    def _format_display_name(self, filename):
+        """Converts filename to a display name without '_init' and with spaces instead of '_'."""
+        name = os.path.splitext(os.path.basename(filename))[0]
+
+        match = re.fullmatch(r"sym_(.+?)_enables_(.+?)_pass", name)
+        if match:
+            from_name, to_name = match.groups()
+            from_name = from_name.replace("_", " ").strip()
+            to_name = to_name.replace("_", " ").strip()
+            return f"{from_name} -> {to_name}"
+
+        if name.endswith("_init"):
+            name = name[:-5]
+            name += ' - Precondition'
+        elif name.endswith("_eff"):
+            name = name[:-4]
+            name += ' - Effect'
+        elif name.endswith("_pass"):
+            name = name[:-5]
+            name += ' - Transition'
+        return name.replace("_", " ").strip()
 
     def run(self):
         latest_session = self.get_latest_session()
         if not latest_session:
             return
 
-        symbols_dir = os.path.join(latest_session, "PDDL", "symbols")
+        symbols_dir = os.path.join(latest_session, "PDDL", "GNG")
         if not os.path.exists(symbols_dir):
             return
 
@@ -700,7 +747,7 @@ class RepresentativePointPictureGenerator(PictureGenerator):
                 rep_node = nodes[rep_idx]
 
                 file_base = os.path.splitext(os.path.basename(json_path))[0]
-                display_title = file_base.replace("_", " ")
+                display_title = self._format_display_name(json_path)
                 img = self.renderer.create_base_canvas(
                     f"REPRESENTATIVE POINT: {display_title}",
                     f"Medoid Node index {rep_idx} out of {len(nodes)} points",
@@ -792,15 +839,43 @@ class TransGraphPictureGenerator(PictureGenerator):
 
 
 class UnifiedGNGPictureGenerator(PictureGenerator):
-    def __init__(self, logs_root="logs", session_dir=None):
+    def __init__(self, logs_root="logs", pred_type='init', session_dir=None):
         super().__init__(logs_root, session_dir=session_dir)
         self.gng_colors = {}
+        self.pred_type = pred_type
         # Borrowing the distinct, vibrant BGR color palette from the live monitor
         self.color_palette = [
             (60, 60, 220),   (60, 220, 60),   (220, 100, 60),
             (60, 200, 220),  (200, 60, 200),  (220, 200, 60),
-            (100, 120, 255), (255, 120, 100), (100, 255, 120)
+            (100, 120, 255), (255, 120, 100), (100, 255, 120),
+            (40, 140, 240),  # Orange-ish
+            (180, 50, 130),  # Purple / Indigo
+            (60, 140, 20),  # Dark / Olive Green
+            (160, 130, 240),  # Coral / Salmon
+            (150, 210, 240),  # Amber / Gold
         ]
+
+    def _format_display_name(self, filename):
+        """Converts filename to a display name without '_init' and with spaces instead of '_'."""
+        name = os.path.splitext(os.path.basename(filename))[0]
+
+        # Handle the "sym_{from_name}_enables_{to_name}_pass" pattern
+        match = re.fullmatch(r"sym_(.+?)_enables_(.+?)_pass", name)
+        if match:
+            from_name, to_name = match.groups()
+            from_name = from_name.replace("_", " ").strip()
+            to_name = to_name.replace("_", " ").strip()
+            return f"{from_name} -> {to_name}"
+
+        # Default fallback handling
+        if name.endswith("_init"):
+            name = name[:-5]
+        elif name.endswith("_eff"):
+            name = name[:-4]
+        elif name.endswith("_pass"):
+            name = name[:-5]
+
+        return name.replace("_", " ").strip()
 
     def _get_color(self, predicate_name):
         if predicate_name not in self.gng_colors:
@@ -811,10 +886,10 @@ class UnifiedGNGPictureGenerator(PictureGenerator):
     def run(self):
         latest_session = self.get_latest_session()
         if not latest_session: return
-        symbols_dir = os.path.join(latest_session, "PDDL", "symbols")
+        symbols_dir = os.path.join(latest_session, "PDDL", "GNG")
         if not os.path.exists(symbols_dir): return
 
-        json_files = glob.glob(os.path.join(symbols_dir, "*.json"))
+        json_files = glob.glob(os.path.join(symbols_dir, f"*_{self.pred_type}.json"))
         
         G = nx.Graph()
         node_colors = {}
@@ -825,7 +900,7 @@ class UnifiedGNGPictureGenerator(PictureGenerator):
                 with open(json_path, 'r') as f:
                     data = json.load(f)
                 
-                pred_name = os.path.splitext(os.path.basename(json_path))[0]
+                pred_name = self._format_display_name(json_path)
                 color = self._get_color(pred_name)
                 
                 nodes = data.get("nodes", [])
@@ -852,13 +927,19 @@ class UnifiedGNGPictureGenerator(PictureGenerator):
                 print(f"[PictureGenerator] Failed to process {json_path} for unified graph: {e}")
 
         if len(G.nodes) == 0: return
-
-        img = self.renderer.create_base_canvas("UNIFIED GNG PLANE", "Topological state space mapping")
+        pred_type = 'Unknown Type'
+        if self.pred_type == 'eff':
+            pred_type = 'effects'
+        elif self.pred_type == 'init':
+            pred_type = 'preconditions'
+        elif self.pred_type == 'pass':
+            pred_type = "transitions"
+        img = self.renderer.create_base_canvas("UNIFIED GNG PLANE", f"Topological state space mapping for {pred_type}")
         self.renderer.draw_unified_GNG(img, G, node_colors, edge_colors, self.gng_colors)
 
         out_dir = self.get_pictures_dir()
         if not out_dir: return
-        out_path = os.path.join(out_dir, "unified_gng_plane.png")
+        out_path = os.path.join(out_dir, f"unified_gng_plane_{self.pred_type}.png")
         cv2.imwrite(out_path, img)
         print(f"[PictureGenerator] Saved Unified GNG plane to {out_path}")
             
@@ -868,7 +949,9 @@ class PipelinePictureGenerator(PictureGenerator):
         self.generators = [
             GNGPictureGenerator(logs_root, session_dir=session_dir),
             TransGraphPictureGenerator(logs_root, session_dir=session_dir),
-            UnifiedGNGPictureGenerator(logs_root, session_dir=session_dir),
+            UnifiedGNGPictureGenerator(logs_root, 'init', session_dir=session_dir),
+            UnifiedGNGPictureGenerator(logs_root, 'eff', session_dir=session_dir),
+            UnifiedGNGPictureGenerator(logs_root, 'pass', session_dir=session_dir),
             UpdateFrequencyPictureGenerator(logs_root, session_dir=session_dir),
             RepresentativePointPictureGenerator(logs_root, session_dir=session_dir)
         ]
@@ -932,15 +1015,19 @@ class LiveSensimotorMonitor(Renderer):
             self._window_created = False
 
 class LiveUpdateFrequencyMonitor(Renderer):
-    def __init__(self, timestamp_path="timestamps.txt", bin_size_sec=10.0, poll_interval=1.0):
+    def __init__(self, logs_root="logs", timestamp_filename="timestamps.txt", bin_size_sec=10.0):
         super().__init__()
-        self.timestamp_path = timestamp_path
+        self.logs_root = logs_root
+        self.timestamp_filename = timestamp_filename
         self.bin_size_sec = bin_size_sec
-        self.poll_interval = poll_interval
-        self._last_poll_time = 0.0
         self._last_mtime = 0.0
         self.window_name = "Live Update Frequency Monitor"
         self._window_created = False
+
+    def get_latest_session(self):
+        if not os.path.exists(self.logs_root): return None
+        session_dirs = [os.path.join(self.logs_root, d) for d in os.listdir(self.logs_root) if os.path.isdir(os.path.join(self.logs_root, d))]
+        return max(session_dirs, key=os.path.basename) if session_dirs else None
 
     def _ensure_window(self):
         if not self._window_created:
@@ -953,21 +1040,22 @@ class LiveUpdateFrequencyMonitor(Renderer):
         self._ensure_window()
         cv2.waitKey(1)
 
-        now = time.time()
-        if now - self._last_poll_time < self.poll_interval:
-            return
-        self._last_poll_time = now
+        latest_session = self.get_latest_session()
+        if not latest_session: return
 
-        if not os.path.exists(self.timestamp_path) or os.path.getsize(self.timestamp_path) == 0:
+        times_path = os.path.join(latest_session, "graphs", self.timestamp_filename)
+
+        if not os.path.exists(times_path) or os.path.getsize(times_path) == 0:
             return
+
 
         try:
-            mtime = os.path.getmtime(self.timestamp_path)
+            mtime = os.path.getmtime(times_path)
             if mtime > self._last_mtime:
-                with open(self.timestamp_path, "r") as f:
+                with open(times_path, "r") as f:
                     timestamps = [float(line.strip()) for line in f if line.strip()]
 
-                img = self.create_base_canvas("LIVE UPDATE FREQUENCY", f"Tracking: {self.timestamp_path}")
+                img = self.create_base_canvas("LIVE UPDATE FREQUENCY", f"Tracking: {times_path}")
                 self.draw_frequency_plot(img, timestamps, bin_size_sec=self.bin_size_sec)
                 self.draw_sample_badge(img, n_points=len(timestamps))
 
@@ -982,12 +1070,10 @@ class LiveUpdateFrequencyMonitor(Renderer):
             self._window_created = False
 
 class LiveGraphMonitor(Renderer):
-    def __init__(self, logs_root="logs", trans_filename="trans_graph.json", poll_interval=1.0):
+    def __init__(self, logs_root="logs", trans_filename="trans_graph.json"):
         super().__init__()
         self.logs_root = logs_root
         self.trans_filename = trans_filename
-        self.poll_interval = poll_interval
-        self._last_poll_time = 0.0
         self._last_trans_mtime = 0.0
         self.trans_window = "Live Transition Graph"
         self._window_created = False
@@ -1007,10 +1093,6 @@ class LiveGraphMonitor(Renderer):
     def update(self):
         self._ensure_window()
         cv2.waitKey(1)
-
-        now = time.time()
-        if now - self._last_poll_time < self.poll_interval: return
-        self._last_poll_time = now
 
         latest_session = self.get_latest_session()
         if not latest_session: return
@@ -1038,36 +1120,63 @@ class LiveGraphMonitor(Renderer):
             self._window_created = False
 
 class LiveGNGMonitor(Renderer):
-    def __init__(self, logs_root="logs", poll_interval=1.0):
+    def __init__(self, logs_root="logs"):
         super().__init__()
         self.logs_root = logs_root
-        self.poll_interval = poll_interval
-        self._last_poll_time = 0.0
-        
+
         self.window_name = "Live GNG Plane"
         self._window_created = False
-        
-        # Track modification times to avoid redundant rendering
+
         self._last_mtimes = {}
-        
-        # Dynamic color tracking for predicates
         self.gng_colors = {}
-        # A list of distinct, vibrant BGR colors
+        
         self.color_palette = [
-            (60, 60, 220),   # Red-ish
-            (60, 220, 60),   # Green-ish
+            (60, 60, 220),  # Red-ish
+            (60, 220, 60),  # Green-ish
             (220, 100, 60),  # Blue-ish
             (60, 200, 220),  # Yellow-ish
             (200, 60, 200),  # Magenta-ish
             (220, 200, 60),  # Cyan-ish
-            (100, 120, 255), # Light Red
-            (255, 120, 100), # Light Blue
-            (100, 255, 120)  # Light Green
+            (100, 120, 255),  # Light Red
+            (255, 120, 100),  # Light Blue
+            (100, 255, 120),  # Light Green
+            (40, 140, 240),  # Orange-ish
+            (180, 50, 130),  # Purple / Indigo
+            (60, 140, 20),  # Dark / Olive Green
+            (160, 130, 240),  # Coral / Salmon
+            (150, 210, 240),  # Amber / Gold
         ]
 
+    def _format_display_name(self, filename):
+        """Converts filename to a display name without '_init' and with spaces instead of '_'."""
+        name = os.path.splitext(os.path.basename(filename))[0]
+
+        match = re.fullmatch(r"sym_(.+?)_enables_(.+?)_pass", name)
+        if match:
+            from_name, to_name = match.groups()
+            from_name = from_name.replace("_", " ").strip()
+            to_name = to_name.replace("_", " ").strip()
+            return f"{from_name} -> {to_name}"
+
+        if name.endswith("_init"):
+            name = name[:-5]
+            name += ' - Precondition'
+        elif name.endswith("_eff"):
+            name = name[:-4]
+            name += ' - Effect'
+        elif name.endswith("_pass"):
+            name = name[:-5]
+            name += ' - Transition'
+        return name.replace("_", " ").strip()
+
     def get_latest_session(self):
-        if not os.path.exists(self.logs_root): return None
-        session_dirs = [os.path.join(self.logs_root, d) for d in os.listdir(self.logs_root) if os.path.isdir(os.path.join(self.logs_root, d))]
+        if not os.path.exists(self.logs_root):
+            return None
+        session_dirs = [
+            os.path.join(self.logs_root, d)
+            for d in os.listdir(self.logs_root)
+            if os.path.isdir(os.path.join(self.logs_root, d))
+        ]
         return max(session_dirs, key=os.path.basename) if session_dirs else None
 
     def _ensure_window(self):
@@ -1077,99 +1186,88 @@ class LiveGNGMonitor(Renderer):
             cv2.imshow(self.window_name, placeholder)
             self._window_created = True
 
-    def _get_color(self, predicate_name):
-        if predicate_name not in self.gng_colors:
+    def _get_color(self, label):
+        if label not in self.gng_colors:
             color_idx = len(self.gng_colors) % len(self.color_palette)
-            self.gng_colors[predicate_name] = self.color_palette[color_idx]
-        return self.gng_colors[predicate_name]
+            self.gng_colors[label] = self.color_palette[color_idx]
+        return self.gng_colors[label]
+
+    def _load_json_with_retry(self, path, retries=3, delay=0.05):
+        for _ in range(retries):
+            try:
+                with open(path, "r") as f:
+                    return json.load(f)
+            except (PermissionError, OSError, json.JSONDecodeError):
+                time.sleep(delay)
+        return None
 
     def update(self):
         self._ensure_window()
         cv2.waitKey(1)
 
-        now = time.time()
-        if now - self._last_poll_time < self.poll_interval: return
-        self._last_poll_time = now
-
         latest_session = self.get_latest_session()
-        if not latest_session: return
+        if not latest_session:
+            return
 
-        symbols_dir = os.path.join(latest_session, "PDDL", "symbols")
-        if not os.path.exists(symbols_dir): return
+        symbols_dir = os.path.join(latest_session, "PDDL", "GNG")
+        if not os.path.exists(symbols_dir):
+            return
 
-        json_files = glob.glob(os.path.join(symbols_dir, "*.json"))
+        json_files = glob.glob(os.path.join(symbols_dir, "*_init.json"))
+        if not json_files:
+            return
+
+        # Check if any symbol file has been modified
+        needs_update = False
+        for f in json_files:
+            try:
+                mtime = os.path.getmtime(f)
+                if self._last_mtimes.get(f, 0.0) < mtime:
+                    needs_update = True
+                    self._last_mtimes[f] = mtime
+            except OSError:
+                continue
+
+        if not needs_update:
+            return
+
+        G = nx.Graph()
+        node_colors = {}
+        edge_colors = {}
+
         for json_path in json_files:
-            data = None
-            for _ in range(3):
-                try:
-                    with open(json_path, 'r') as f:
-                        data = json.load(f)
-                    break
-                except (PermissionError, OSError, json.JSONDecodeError):
-                    time.sleep(0.05)
-
+            data = self._load_json_with_retry(json_path)
             if data is None:
                 continue
 
-            try:
-                pred_name = os.path.splitext(os.path.basename(json_path))[0]
-                color = self._get_color(pred_name)
-                # ... rest of the parsing logic ...
+            display_name = self._format_display_name(json_path)
+            color = self._get_color(display_name)
 
-                # Check if any symbol file has changed
-                needs_update = False
-                for f in json_files:
-                    mtime = os.path.getmtime(f)
-                    if self._last_mtimes.get(f, 0.0) < mtime:
-                        needs_update = True
-                        self._last_mtimes[f] = mtime
-                
-                if not needs_update: return
+            nodes = data.get("nodes", [])
+            radiuses = data.get("local_radiuses", [])
 
-                G = nx.Graph()
-                node_colors = {}
-                edge_colors = {}
-        
-                for json_path in json_files:
-                    try:
-                        with open(json_path, 'r') as f:
-                            data = json.load(f)
-                
-                        pred_name = os.path.splitext(os.path.basename(json_path))[0]
-                        color = self._get_color(pred_name)
-                
-                        nodes = data.get("nodes", [])
-                        radiuses = data.get("local_radiuses", [])
-                
-                        for i in range(len(nodes)):
-                            node_id = f"{pred_name}_{i}"
-                    
-                            # Safely map the local radius to the node
-                            r_val = radiuses[i] if i < len(radiuses) else 0.0
-                            G.add_node(node_id, radius=r_val)
-                    
-                            node_colors[node_id] = color
+            for i in range(len(nodes)):
+                node_id = f"{display_name}_{i}"
+                r_val = radiuses[i] if i < len(radiuses) else 0.0
+                G.add_node(node_id, radius=r_val)
+                node_colors[node_id] = color
 
-                        edges_dict = data.get("edges", {})
-                        for edge_str in edges_dict.keys():
-                            u_str, v_str = edge_str.split(",")
-                            u_id = f"{pred_name}_{u_str}"
-                            v_id = f"{pred_name}_{v_str}"
-                            G.add_edge(u_id, v_id)
-                            edge_colors[(u_id, v_id)] = color
-                            edge_colors[(v_id, u_id)] = color
-                    except Exception as e:
-                        print(f"[LiveGNGMonitor] Failed to read {json_path}: {e}")
+            edges_dict = data.get("edges", {})
+            for edge_str in edges_dict.keys():
+                u_str, v_str = edge_str.split(",")
+                u_id = f"{display_name}_{u_str}"
+                v_id = f"{display_name}_{v_str}"
+                G.add_edge(u_id, v_id)
+                edge_colors[(u_id, v_id)] = color
+                edge_colors[(v_id, u_id)] = color
 
-                if len(G.nodes) == 0: return
+        if len(G.nodes) == 0:
+            return
 
-                img = self.create_base_canvas("LIVE GNG PLANE")
-                self.draw_unified_GNG(img, G, node_colors, edge_colors, self.gng_colors)
-
-                cv2.imshow(self.window_name, img)
-
-            except OSError:
-                pass
+        img = self.create_base_canvas("LIVE GNG PLANE", "preconditions")
+        # self.gng_colors uses display_name keys (cleaned up for the legend)
+        self.draw_unified_GNG(img, G, node_colors, edge_colors, self.gng_colors)
+        cv2.imshow(self.window_name, img)
 
     def close(self):
         if self._window_created:
@@ -1231,7 +1329,7 @@ class LiveRepresentativePointMonitor(Renderer):
             return
 
         action_file = os.path.join(
-            latest_session, "PDDL", "symbols", f"{action_name}.json"
+            latest_session, "PDDL", "GNG", f"{action_name}_init.json"
         )
         if not os.path.isfile(action_file):
             return

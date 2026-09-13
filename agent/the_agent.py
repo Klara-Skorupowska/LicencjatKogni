@@ -213,7 +213,7 @@ class TheAgent(Agent):
             traceback.print_exc()
 
         finally:
-            self.brain.update_predicates(self.fail_buffor)
+            self.brain.update(self.fail_buffor)
             self.end_time = time.time()
             self.brain._logger()
             self.test_run()
@@ -236,10 +236,9 @@ class TheAgent(Agent):
         #-> execute the skill
         skill = self.skillset[skill_name]
         succeed = skill.execute()
-        #-> update edges
-        self.brain.update_transition(prev_skill.name, skill_name, prev_skill.succeed, succeed)
+        post_vector_state = self.read_state()
         #-> Is the outcome expectable? expectable = preconditions are met and success OR preconditions are not met and fail
-        data = (prev_vector_state, skill_name, succeed)
+        data = (prev_vector_state, skill_name, post_vector_state, succeed)
         expectable = ( preconditions_are_met and succeed ) or (not preconditions_are_met and not succeed)
         if not expectable:
             #-> add to buffor
@@ -295,8 +294,11 @@ class TheAgent(Agent):
         ## done as self.previous_skill
      
     def add_to_buffor(self, data):
+        print(f"[Agent] Add data to buffor. {len(self.fail_buffor)}/{self.buffor_max_len}")
         if len(self.fail_buffor) >= self.buffor_max_len:
-            self.brain.update_predicates(self.fail_buffor)
+            self.bus.call_service("/supervisor/do/switchSleep")
+            self.brain.update(self.fail_buffor)
+            self.bus.call_service("/supervisor/do/switchSleep")
             self.batch_update_count += 1
             self.fail_buffor = []
         self.fail_buffor.append(data)
@@ -334,13 +336,14 @@ class TheAgent(Agent):
         domain_file = os.path.join(plan_dir, f"domain.pddl")
         problem_file = os.path.join(plan_dir, f"problem.pddl")
         plan_file = os.path.join(plan_dir, f"problem.pddl.soln")
-
+        #-> abstract symbols
+        self.brain.abstract_symbols()
         #-> generate domain.pddl
         domain_str = self.brain.generate_domain_pddl()
         with open(domain_file, "w") as f:
             f.write(domain_str)
         #-> generate problem.pddl
-        problem_str = self.brain.generate_problem_pddl(initial_state=start_skill, goal_state=goal_skill)
+        problem_str = self.brain.generate_problem_pddl(start_skill, goal_skill)
         with open(problem_file, "w") as f:
             f.write(problem_str)
         #-> run solver
@@ -396,7 +399,6 @@ class TheAgent(Agent):
         if len(executable_plan)<=0:
             print(f"[Agent] Error: no executable plan.")
         else:
-            executable_plan.append(goal_skill)
             # move executable plan to not temporary folder
             '''
             exec_plan_dir = os.path.join(self.pddl_dir, f"plan_{self.run_count}")
@@ -418,6 +420,7 @@ class TheAgent(Agent):
                 last_step = '-'
                 result = False
             else:
+                last_step = '-'
                 result = True
                 print(f"[Agent] Executing plan: {plan}")
                 for step, skill_name in enumerate(plan):

@@ -50,18 +50,23 @@ class Predicate():
         raw_radius = 0.5 * min(dists)
         return float(np.clip(raw_radius, self.base_radius, self.max_radius))
 
-    def is_active(self, vector):
+    def is_active(self, vector, mask=None):
         """Check if a vector falls within the network's bounded Voronoi volume."""
         if not self.nodes:
             return False
         
         vec = np.asarray(vector)
         nodes_mat = np.asarray(self.nodes)
-    
+
+        # Apply dimensional feature mask
+        if mask is not None and len(mask) > 0:
+            vec = vec[mask]
+            nodes_mat = nodes_mat[:, mask]
+
         if vec.shape[-1] != nodes_mat.shape[-1]:
             raise ValueError(f"Vector dimension {vec.shape[-1]} does not match node dimension {nodes_mat.shape[-1]}.")
 
-        # Vectorized Euclidean distance calculation across all nodes
+        # Vectorized Euclidean distance across the (masked) dimension space
         dists = np.linalg.norm(nodes_mat - vec, axis=1)
         n1_idx = int(np.argmin(dists))
         n1_dist = dists[n1_idx]

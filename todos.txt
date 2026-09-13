@@ -10,15 +10,20 @@
 ()  - zrobione, a nie było planowane
 ---------------------------------------
 ---------------------------------------
+### 13.09.2026 ###
+[o] testy aż osiągnie wymaganą dokładność
+[] zobaczyć ile startów mu potrzeba, żeby się nauczył. ODP.: 
+
 ### 12.09.2026 ###
-	móstwo robię na bieżąco
+	móstwo robię na bieżąco - znalazłam probelem :(
+[o] trans graf jest nietrzebny, bo przecież przed i po każdej akcji; nie musimy zbierać kolejności, ona wynika z założeń i efektów. = nowa gałąź
 
 ### 11.09.2026 ###
 [o] ogarnij skille, znów
 [o] dodaj debugline pybullet żeby widzieć gdzie jest jaka strefa
 
 ### 11.09.2026 ###
-[] zobaczyć ile startów mu potrzeba, żeby się nauczył. ODP.:
+[!] zobaczyć ile startów mu potrzeba, żeby się nauczył. ODP.:
 [o] dodaj arena_color.xacro do GITa
 [o] podczas testowania: sukces akcji oceniaj spełnieniem efektu (symbole), a nie odgórnie
 

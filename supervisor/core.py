@@ -22,7 +22,10 @@ class Supervisor():
         self.bus.register_service(f"/supervisor/ask/goal_zone", self.goal_zone)
 
         self.bus.register_service(f"/supervisor/do/restart", self.restart)
-        
+
+        self.bus.register_service(f"/supervisor/do/switchSleep", self.switch_sleep)
+        self.sleeping = False
+        self.sleep_text_id = None
 
     def setup(self):
         # call from other sources
@@ -42,6 +45,33 @@ class Supervisor():
         '''
         return 0
 
+    def switch_sleep(self, request=None):
+        '''
+        Draw 'Zzz' above the robot, while is on
+        '''
+        if not self.sleeping:
+            # Put to sleep: draw 'Zzz' above the robot
+            pos, _ = p.getBasePositionAndOrientation(self.robot_id)
+            text_pos = [pos[0], pos[1], pos[2] + 0.2]  # 0.2m above robot base
+            
+            self.sleep_text_id = p.addUserDebugText(
+                text="Zzz",
+                textPosition=text_pos,
+                textColorRGB=[0.2, 0.6, 1.0],  # Soft blue
+                textSize=1.5,
+                lifeTime=0  # 0 keeps it until manually removed
+            )
+            self.sleeping = True
+        else:
+            # Wake up: delete the writing
+            if self.sleep_text_id is not None:
+                p.removeUserDebugItem(self.sleep_text_id)
+                self.sleep_text_id = None
+            self.sleeping = False
+
+        return self.sleeping
+
+
     def which_room(self, request=None):
         '''
         for when agent ask a question: in which room am I.
@@ -60,7 +90,7 @@ class Supervisor():
 
         if self.last_position is not None:
             distance = math.dist(position, self.last_position)
-            if distance < 0.01:
+            if distance < 0.01 and not self.sleeping:
                 print("[Supervisor] Robot stuck in place for too long.")
                 self.bus.publish("/cmd/wheels", {"left": 0, "right": 0})
                 self.restart()
@@ -136,6 +166,11 @@ class Supervisor():
        
     def restart(self, request=None):
         print("[Supervisor] Robot in environment reset.")
+        # Clear any active sleep debug text on reset
+        if self.sleep_text_id is not None:
+            p.removeUserDebugItem(self.sleep_text_id)
+            self.sleep_text_id = None
+        self.sleeping = False
         # Reset robot position
         _, orientation = self.bus.call_service(f"/realrobot/give_initial_position")
         x_pos = random.uniform(-0.45, -0.25)
