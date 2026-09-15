@@ -106,15 +106,15 @@ class BrainNetwork:
         self.trans_graph = Graph()
 
         # predicates as GNG - parameters
-        self.max_points = None           # maxium of points in single GNG, if None then 2*dim
+        self.max_points = 100          # maxium of points in single GNG, if None then 2*dim
         self.base_radius = 0.1          # radius around separated GNG node
         self.max_radius = None          # maximum local radius, if None then sqrt(dim)
-        self.learning_rate_b = 0.2      # Fraction to move the nearest node
-        self.learning_rate_n = 0.01     # Fraction to move topological neighbors
+        self.learning_rate_b = 0.5      # Fraction to move the nearest node
+        self.learning_rate_n = 0.1      # Fraction to move topological neighbors
         self.max_edge_age = 10          # Maximum age of an edge before removal
-        self.lambda_step = 3            # Steps between node insertion
+        self.lambda_step = 5            # Steps between node insertion
         self.alpha = 0.5                # Error reduction during insertion
-        self.d = 0.95                   # Global error decay per step
+        self.d = 0.99                   # Global error decay per step
 
         # Logging Setup
         self.log_dir = log_dir
@@ -287,7 +287,8 @@ class BrainNetwork:
                 if is_inside:
                     overlapping_points.append(node)
 
-            if overlapping_points and skill_name != target_skill:
+            enough_overlapping = len(overlapping_points) >= len(init_gng.nodes) * 0.6 # filter out too small overlappings
+            if overlapping_points and skill_name != target_skill and  enough_overlapping:
                 self.trans_graph.add_edge(skill_name, target_skill)
                 overlapping_points_map[target_skill] = overlapping_points
             else:
@@ -366,7 +367,7 @@ class BrainNetwork:
                     base_radius=init_gng.base_radius,
                     max_radius=init_gng.max_radius
                 )
-                for pt in overlapping_points: # why?
+                for pt in overlapping_points:
                     sym_pred.update(pt, valence=True)
 
                 edge.symbol = sym_pred
@@ -445,6 +446,14 @@ class BrainNetwork:
         '''
         if not self.log_dir:
             return
+
+        
+        # transitions up to date:
+        for skill in self.trans_graph.nodes.keys():
+            self.update_transitions(skill)
+        # symbols up to date:
+        self.abstract_symbols()
+
 
         for skill, node in self.trans_graph.nodes.items():
             self.save_predicate(skill, node.precondition, 'init')

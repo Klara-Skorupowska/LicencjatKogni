@@ -657,7 +657,7 @@ class GNGPictureGenerator(PictureGenerator):
                 var_vals = np.var(nodes, axis=0)
                 
                 display_title = self._format_display_name(json_path)
-                img = self.renderer.create_base_canvas(f"GNG INVARIANTS: {display_title}")
+                img = self.renderer.create_base_canvas(f"CATEGORICAL REPRESENTATION: {display_title}")
                 
                 # Pass min, max, and mean for all lidar directions
                 lidar_data = list(zip(min_vals[:8], max_vals[:8], mean_vals[:8]))
@@ -749,7 +749,7 @@ class RepresentativePointPictureGenerator(PictureGenerator):
                 file_base = os.path.splitext(os.path.basename(json_path))[0]
                 display_title = self._format_display_name(json_path)
                 img = self.renderer.create_base_canvas(
-                    f"REPRESENTATIVE POINT: {display_title}",
+                    f"ICONIC REPRESENTATION: {display_title}",
                     f"Medoid Node index {rep_idx} out of {len(nodes)} points",
                 )
 
@@ -763,7 +763,7 @@ class RepresentativePointPictureGenerator(PictureGenerator):
 
                 self.renderer.draw_sample_badge(img, n_points=len(nodes))
 
-                out_path = os.path.join(out_dir, f"{file_base}_rep_point.png")
+                out_path = os.path.join(out_dir, f"{file_base}_icon.png")
                 cv2.imwrite(out_path, img)
                 print(
                     f"[Picture Generator] Saved image to {out_path}"

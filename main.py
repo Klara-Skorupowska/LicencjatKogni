@@ -112,14 +112,7 @@ def get_latest_session(logs_root):
     session_dirs = [os.path.join(logs_root, d) for d in os.listdir(logs_root) if os.path.isdir(os.path.join(logs_root, d))]
     return max(session_dirs, key=os.path.basename) if session_dirs else None
 
-if __name__ == "__main__":
-    ### Choose Parameters Here ###
-    session_dir = 'continue'     # 'new' or 'continue' or <session dir> - direction where the brain is (under /logs/session_dir)
-    runs = 1             # no. runs - either execution of plan or exploration - before test
-    tests = 10              # how many times tries to go from start to finish from random spawn
-    time_limit = 4.75       # in hours, breaks the loop
-    min_success_rate = 0.7  # % of successful test to break the loop
-
+def run_til_success(session_dir, runs, tests, time_limit = 2, min_success_rate = 0.5):
     sum_runs = 0
     retries = 0
     start_time = time.time()
@@ -139,4 +132,16 @@ if __name__ == "__main__":
     minutes, seconds = divmod(remainder, 60)
     duration_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
     mssg = f"After {retries} attemps ({sum_runs} runs) program achieved success rate of {get_success_rate(stats_file_path):.2f}. Work time: {duration_str}\n"
-    append_text_to_file(stats_file_path, f"")
+    append_text_to_file(stats_file_path, mssg)
+
+if __name__ == "__main__":
+    ### Choose Parameters Here ###
+    session_dir = 'continue'    # 'new' or 'continue' or <session dir> - direction where the brain is (under /logs/session_dir)
+    runs = 1000                 # no. runs - either execution of plan or exploration - before test
+    tests = 10                  # how many times tries to go from start to finish from random spawn
+    time_limit = 4.75           # in hours, passing the limit breaks the loop
+    min_success_rate = 0.7      # % of successful tests to break the loop
+
+    run_til_success(session_dir, runs, tests, time_limit, min_success_rate)
+
+    #main(session_dir, runs, tests) # MAIN LOOP #

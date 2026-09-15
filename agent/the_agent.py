@@ -102,11 +102,12 @@ class TheAgent(Agent):
         if message['reason'] == 'finish':
             self.bus.call_service("/supervisor/do/restart")
 
-    def _reset_run_state(self):
+    def _reset_and_restart(self):
         """Resets skills and clears flags for the next run."""
         self.previous_skill = self.ExecutedSkill(None, None)
         self.current_skill = None
         self.reset_requested = False
+        self.bus.call_service("/supervisor/do/restart")
 
     def _get_latest_session(self, logs_root):
         target_dir = None
@@ -174,13 +175,13 @@ class TheAgent(Agent):
         try:
            self.run_count = 0
            self.start_time = time.time()
-           self._reset_run_state()
+           self._reset_and_restart()
 
            while self.run_count < self.max_runs:
                self._logger(self.run_count)
                self.run_count += 1
                print(f"[Agent] Run {self.run_count}/{self.max_runs} ---------------")
-               if self.reset_requested: self._reset_run_state()
+               if self.reset_requested: self._reset_and_restart()
                #-> Generate Plan
                plan, start_skill, finish_skill = self.generate_plan()
                if len(plan) < 1: # what if plan is empty? Explore
@@ -272,8 +273,7 @@ class TheAgent(Agent):
 
     def explore(self):
         print("[Agent] Explore")
-        #-> choose random action (not checking the finish)
-        #available_skills = [k for k in self.skillset if k != "Finish"]
+        #-> choose random action
         available_skills = list(self.skillset.keys())
         if not available_skills:
             return None
@@ -289,7 +289,7 @@ class TheAgent(Agent):
             self._reset_run_state()
         '''
         # test for being stuck
-        if self.reset_requested: self._reset_run_state()
+        if self.reset_requested: self._reset_and_restart()
         #-> return this action 
         ## done as self.previous_skill
      
@@ -398,12 +398,11 @@ class TheAgent(Agent):
                     executable_plan.append(matched_skill) 
         if len(executable_plan)<=0:
             print(f"[Agent] Error: no executable plan.")
-        else:
-            # move executable plan to not temporary folder
-            '''
+        elif len(executable_plan) > 6:
+            # move executable, full length plan to a pernment folder
             exec_plan_dir = os.path.join(self.pddl_dir, f"plan_{self.run_count}")
             os.rename(plan_dir, exec_plan_dir)
-            '''
+
         return executable_plan, start_skill, goal_skill
 
     def  test_run(self):

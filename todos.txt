@@ -13,6 +13,8 @@
 ### 13.09.2026 ###
 [o] testy aż osiągnie wymaganą dokładność
 [] zobaczyć ile startów mu potrzeba, żeby się nauczył. ODP.: 
+[] ujednolicenie statystyk dla wszystkich testów, zebranie wspólnego histogramu updatów
+[] przeprowanie samych testów, statystyki dla testów: czas, liczba akcji, najbardziej problematyczne akcje
 
 ### 12.09.2026 ###
 	móstwo robię na bieżąco - znalazłam probelem :(
@@ -20,7 +22,7 @@
 
 ### 11.09.2026 ###
 [o] ogarnij skille, znów
-[o] dodaj debugline pybullet żeby widzieć gdzie jest jaka strefa
+[o] dodaj debugline pybullet, żeby widzieć gdzie jest jaka strefa
 
 ### 11.09.2026 ###
 [!] zobaczyć ile startów mu potrzeba, żeby się nauczył. ODP.:
