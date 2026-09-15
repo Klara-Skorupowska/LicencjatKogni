@@ -1,0 +1,1 @@
+{"nodes": ["Find_the_Goal", "Aproach_the_Door", "Aproach_the_Goal", "Finish", "Open_the_Door", "Find_the_Door", "Start"], "masks": [[], [], [], [0], [61, 66, 71, 101, 106, 111, 141, 146, 151], [], []], "edges": []}
