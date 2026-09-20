@@ -15,6 +15,7 @@
 [] zobaczyć ile startów mu potrzeba, żeby się nauczył. ODP.: 
 [] ujednolicenie statystyk dla wszystkich testów, zebranie wspólnego histogramu updatów
 [] przeprowanie samych testów, statystyki dla testów: czas, liczba akcji, najbardziej problematyczne akcje
+[] dodanie do krawędzi ile % punktów się overlappuje (koszt)
 
 ### 12.09.2026 ###
 	móstwo robię na bieżąco - znalazłam probelem :(

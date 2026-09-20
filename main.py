@@ -137,11 +137,11 @@ def run_til_success(session_dir, runs, tests, time_limit = 2, min_success_rate =
 if __name__ == "__main__":
     ### Choose Parameters Here ###
     session_dir = 'continue'    # 'new' or 'continue' or <session dir> - direction where the brain is (under /logs/session_dir)
-    runs = 1000                 # no. runs - either execution of plan or exploration - before test
-    tests = 10                  # how many times tries to go from start to finish from random spawn
-    time_limit = 4.75           # in hours, passing the limit breaks the loop
+    runs = 0                 # no. runs - either execution of plan or exploration - before test
+    tests = 100                 # how many times tries to go from start to finish from random spawn
+    time_limit = 4              # in hours, passing the limit breaks the loop
     min_success_rate = 0.7      # % of successful tests to break the loop
 
-    run_til_success(session_dir, runs, tests, time_limit, min_success_rate)
+    #run_til_success(session_dir, runs, tests, time_limit, min_success_rate)
 
-    #main(session_dir, runs, tests) # MAIN LOOP #
+    main(session_dir, runs, tests)

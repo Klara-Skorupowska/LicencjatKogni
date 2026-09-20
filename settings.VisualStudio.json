@@ -2,5 +2,8 @@
 {
   "textEditor.general.display.bracePairColorization": true,
   "textEditor.general.display.blockStructure": true,
-  "textEditor.general.display.errorSquiggles": true
+  "textEditor.general.display.errorSquiggles": true,
+  "textEditor.general.display.bidirectionalTextControlCharacters": true,
+  "textEditor.general.display.wordWrapAutoIndent": true,
+  "textEditor.general.clickToGoToDefinition": true
 }

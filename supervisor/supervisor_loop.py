@@ -11,10 +11,10 @@ def supervisor_loop(bus: Communicator, setup_complete_event: threading.Event, st
     # status boards
     # colectiong data
     time_step = 1.0 / 5.0
-    stuck_check_time_step = 5 # sec
+    stuck_check_time_step = 10 # sec
     god = Supervisor(bus)
     god.setup()
-    monitors = [LiveGraphMonitor()] #[LiveGraphMonitor(), LiveSensimotorMonitor(bus), LiveGNGMonitor(), LiveRepresentativePointMonitor(bus), LiveUpdateFrequencyMonitor()]
+    monitors = [LiveGraphMonitor(), LiveGNGMonitor()] #[LiveGraphMonitor(), LiveSensimotorMonitor(bus), LiveGNGMonitor(), LiveRepresentativePointMonitor(bus), LiveUpdateFrequencyMonitor()]
     print("[Supervisor] Loaded.")
     setup_complete_event.set() 
     

@@ -26,6 +26,7 @@
     <Compile Include="additional_scripts\brain_viewer.py" />
     <Compile Include="additional_scripts\notes.py" />
     <Compile Include="additional_scripts\2D_predicate.py" />
+    <Compile Include="additional_scripts\parameter_finder.py" />
     <Compile Include="agent\predicate.py" />
     <Compile Include="supervisor\visualize.py" />
     <Compile Include="agent\core.py" />
@@ -857,6 +858,7 @@
     <Folder Include="agent\" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include="additional_scripts\histogram_plot.py" />
     <Content Include="models\arena_color.xacro" />
     <Content Include="logs\2026-09-03_13-46\graphs\final\gng_graph.json" />
     <Content Include="logs\2026-09-03_13-46\graphs\final\transitional_graph.graphml" />
